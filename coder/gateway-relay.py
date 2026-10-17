@@ -4,11 +4,17 @@ The gateway on Cloud Run takes two things: a Google identity with run.invoker (t
 VM's service account has it, and nothing else), and the person's own LiteLLM key,
 which Gemini CLI sends itself. Workspaces reach this relay at host.docker.internal:4000.
 Only IAP can reach this VM (ports 22 and 3000), so 4000 is not reachable from outside.
+
+Gemini CLI asks for Google's own model IDs (its Auto mode picks them itself, e.g.
+gemini-3.8-flash or gemini-3.1-pro-preview), while the gateway serves stable names that each
+person's key lists. The relay maps one to the other in the URL; the key still decides, so a
+level without a Pro model still gets a 403 for a Pro request.
 """
 
 import http.client
 import http.server
 import os
+import re
 import threading
 import time
 import urllib.parse
@@ -21,7 +27,21 @@ METADATA = ("http://metadata.google.internal/computeMetadata/v1/instance/service
 SKIP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers",
         "transfer-encoding", "upgrade", "host", "content-length", "date", "server"}
 
+GATEWAY_MODELS = {"gemini-flash", "gemini-pro"}
+MODEL_IN_PATH = re.compile(r"(/models/)([^/:?]+)")
+
 _token, _expires, _lock = "", 0.0, threading.Lock()
+
+
+def gateway_model(name: str) -> str:
+    """Google's model ID -> the gateway's name for it (anything else passes through)."""
+    if name in GATEWAY_MODELS or not name.startswith("gemini-") or "embedding" in name:
+        return name
+    return "gemini-pro" if "-pro" in name else "gemini-flash"
+
+
+def gateway_path(path: str) -> str:
+    return MODEL_IN_PATH.sub(lambda m: m.group(1) + gateway_model(m.group(2)), path, count=1)
 
 
 def id_token() -> str:
@@ -42,7 +62,7 @@ class Relay(http.server.BaseHTTPRequestHandler):
         headers = {k: v for k, v in self.headers.items() if k.lower() not in SKIP}
         headers["X-Serverless-Authorization"] = "Bearer " + id_token()
         upstream = http.client.HTTPSConnection(HOST, timeout=600)
-        upstream.request(self.command, self.path, body=body or None, headers=headers)
+        upstream.request(self.command, gateway_path(self.path), body=body or None, headers=headers)
         resp = upstream.getresponse()
         self.send_response(resp.status)
         for k, v in resp.getheaders():

@@ -88,6 +88,12 @@ const PROMPTS = {
   ava: ["Which files decide a candidate's recommendation?", "Which model does the app use for scoring?"],
 };
 const SUGGEST_EXTRA = ["Change the page title in public/index.html to \"FirstRound | Screening interviews\"."];
+const PROJECT_PROMPTS = {
+  rolespace: ["How does RoleSpace stop a person who is over budget?", "Where is the path allow-list for Suggest edits checked?",
+              "How does the audit log detect a deleted event?", "Which models can each level use, and where is that decided?"],
+  screener: ["What does this app do, in five bullet points?", "How is a candidate's score calculated?",
+             "How do I run this project locally?", "Which environment variables must be set?"],
+};
 
 const S = { info: null, me: null, route: "assistant", chats: {}, busy: {}, renderId: 0, status: null, timers: {}, reqOpen: 0 };
 const me = () => S.info.people.find((p) => p.id === S.me);
@@ -101,6 +107,7 @@ const ROUTES = {
   overview: { label: "Overview", icon: "chart", group: "Govern", show: isGov, render: renderOverview },
   usage: { label: "Usage", icon: "key", group: "Govern", show: isGov, render: renderUsage },
   people: { label: "People & access", icon: "users", group: "Govern", show: isGov, render: renderPeople },
+  repos: { label: "Repo access", icon: "branch", group: "Govern", show: isGov, render: renderRepoAccess },
   policy: { label: "Policy", icon: "shield", group: "Govern", show: isGov, render: renderPolicy },
   audit: { label: "Audit log", icon: "file", group: "Govern", show: isGov, render: renderAudit },
   architecture: { label: "Architecture", icon: "network", group: "Govern", show: isGov, wide: true,
@@ -157,13 +164,13 @@ function toast(msg, kind = "ok") {
   setTimeout(() => t.remove(), kind === "bad" ? 7000 : 4000);
 }
 
-function modal({ title, sub = "", body, confirm, danger = false, onConfirm, onCancel, wide = false }) {
+function modal({ title, sub = "", body, confirm, danger = false, onConfirm, onCancel, wide = false, cancelButton = true }) {
   const wrap = document.createElement("div");
   wrap.className = "backdrop";
   wrap.innerHTML = `<div class="modal${wide ? " wide" : ""}" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-head"><h3 id="modal-title">${esc(title)}</h3>${sub ? `<p>${esc(sub)}</p>` : ""}</div>
     <form class="modal-body" novalidate>${body}</form>
-    <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button>
+    <div class="modal-foot">${cancelButton ? `<button type="button" class="btn" data-close>Cancel</button>` : ""}
       <button type="button" class="btn ${danger ? "danger" : "primary"}" data-ok>${esc(confirm)}</button></div></div>`;
   const prevFocus = document.activeElement;
   let done = false;
@@ -180,7 +187,7 @@ function modal({ title, sub = "", body, confirm, danger = false, onConfirm, onCa
     finally { ok.disabled = false; }
   };
   wrap.addEventListener("mousedown", (ev) => { if (ev.target === wrap) cancel(); });
-  $("[data-close]", wrap).addEventListener("click", cancel);
+  $("[data-close]", wrap)?.addEventListener("click", cancel);
   ok.addEventListener("click", submit);
   $("form", wrap).addEventListener("submit", submit);
   document.addEventListener("keydown", onKey);
@@ -227,7 +234,7 @@ function welcome() {
 }
 
 function setPersona(id, route) {
-  if (!S.chats[id]) api("/api/reset", { person: id }).catch(() => {});  // a fresh page starts a fresh chat
+  if (!S.chats[id]) { S.chats[id] = []; restoreChat(id); }  // a fresh page picks up where this browser left off
   S.me = id;
   const url = new URL(location.href);
   url.searchParams.set("as", id);
@@ -269,11 +276,9 @@ function render() {
       <header class="topbar">
         <div class="crumbs">${esc(S.info.company)} ${icon("chevron")} <b>${esc(r.label)}</b></div>
         <div class="spacer"></div>
-        <a class="chip repo" href="https://github.com/${esc(S.info.repo)}/tree/${esc(S.info.commit)}" target="_blank" rel="noopener">
-          ${icon("branch")} ${esc(S.info.repo)} <span class="mono">@${esc(S.info.commit.slice(0, 7))}</span></a>
+        ${repoChip()}
         <span class="chip" title="Fingerprint of role.yaml as deployed">${icon("shield")} Policy <span class="mono">${esc(S.info.policy_version.slice(0, 7))}</span></span>
         <span class="chip" id="status-chip"><span class="dot"></span> Checking services…</span>
-        <span class="chip demo" title="Personas stand in for directory groups. Anyone signed in can switch persona; admin changes need the presenter's passcode.">Demo</span>
       </header>
       <main class="page ${r.wide ? "wide" : ""}" id="page"></main>
     </div>`;
@@ -354,20 +359,25 @@ function renderAssistant(page) {
   const p = me();
   page.innerHTML = `<div class="assistant">
     <section class="panel thread" aria-label="Conversation">
-      <div class="panel-head"><h2>Assistant <span class="sub">${cap(p.level)} level · ${esc(projectName(currentProject(p)))}</span></h2>
+      <div class="panel-head"><h2>Assistant <span class="sub">${cap(p.level)} level</span></h2>
+        ${(p.projects || []).length > 1 ? `<label class="model-pick" title="The codebase the assistant reads. Switching starts a new chat.">
+          <span class="muted small">Project</span><select id="project-pick" class="input sm">${p.projects.map((k) =>
+            `<option value="${esc(k)}" ${k === currentProject(p) ? "selected" : ""}>${esc(projectName(k))}</option>`).join("")}</select></label>` : ""}
         <label class="model-pick" title="Models your level allows. The gateway enforces the same list on your key.">
           <span class="muted small">Model</span><select id="model-pick" class="input sm">${(p.models || []).map((m) =>
             `<option value="${esc(m)}" ${m === currentModel(p) ? "selected" : ""}>${esc(modelLabel(m))}</option>`).join("")}</select></label>
+        <button class="btn sm ghost" data-action="chat-history" title="Chats saved in this browser">${icon("clock")} History</button>
         <button class="btn sm ghost" data-action="new-chat">${icon("plus")} New chat</button></div>
       <div class="messages" id="messages" aria-live="polite"></div>
       <div class="composer">
-        <div class="box"><textarea id="q" rows="1" placeholder="Ask about the ${esc(S.info.company)} codebase…" aria-label="Message"></textarea>
+        <div class="box"><textarea id="q" rows="1" placeholder="Ask about ${esc(projectName(currentProject(p)))}…" aria-label="Message"></textarea>
           <button class="btn primary icon" id="send" data-action="send" aria-label="Send">${icon("send")}</button></div>
         <div class="hint"><span>Enter to send · Shift+Enter for a new line</span><span>${esc(p.agent_model)} through the model gateway, on ${esc(first(p.name))}'s own key</span></div>
       </div>
     </section>
     <aside class="rail" id="rail" aria-label="Your access"></aside></div>`;
   $("#model-pick")?.addEventListener("change", (e) => { (S.model ||= {})[p.id] = e.target.value; });
+  $("#project-pick")?.addEventListener("change", (e) => switchProject(p.id, e.target.value));
   const q = $("#q");
   q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
   q.addEventListener("input", () => { q.style.height = "auto"; q.style.height = Math.min(180, q.scrollHeight) + "px"; });
@@ -379,12 +389,16 @@ function renderMessages() {
   const box = $("#messages");
   if (!box) return;
   const p = me(), msgs = S.chats[S.me] || [];
-  if (!msgs.length) {
-    const prompts = [...(PROMPTS[S.me] || []), ...(p.level === "suggest" && S.me !== "leo" ? SUGGEST_EXTRA : [])];
+  if (!msgs.length && S.restoring?.[S.me]) {
+    box.innerHTML = `<div class="welcome"><div class="working"><span class="spinner"></span> Loading your last chat…</div></div>`;
+  } else if (!msgs.length) {
+    const proj = currentProject(p), firstround = proj === Object.keys(S.info.projects || {})[0];
+    const prompts = firstround ? [...(PROMPTS[S.me] || []), ...(p.level === "suggest" && S.me !== "leo" ? SUGGEST_EXTRA : [])]
+      : PROJECT_PROMPTS[proj] || PROJECT_PROMPTS.screener;
     box.innerHTML = `<div class="welcome"><div class="mark">${logo(22)}</div>
-      <h2>Ask anything about the ${esc(S.info.company)} codebase</h2>
+      <h2>Ask anything about ${esc(projectName(proj))}</h2>
       <p>Every answer cites the exact lines it used, and RoleSpace checks each citation against commit
-        <span class="mono">${esc(S.info.commit.slice(0, 7))}</span>. ${esc(LEVEL_TEXT[p.level])}</p>
+        <span class="mono">${esc(projectCommit(proj).slice(0, 7))}</span> of <span class="mono">${esc(projectRepo(proj))}</span>. ${esc(LEVEL_TEXT[p.level])}</p>
       <div class="suggestions">${prompts.map((t) => `<button class="suggestion" data-action="prompt" data-text="${esc(t)}">${icon("message")}<span>${esc(t)}</span></button>`).join("")}</div></div>`;
   } else {
     box.innerHTML = msgs.map(renderMsg).join("");
@@ -392,7 +406,7 @@ function renderMessages() {
   }
   const busy = !!S.busy[S.me];
   if ($("#send")) $("#send").disabled = busy;
-  if ($("#q")) $("#q").placeholder = busy ? "Working on your last question…" : `Ask about the ${S.info.company} codebase…`;
+  if ($("#q")) $("#q").placeholder = busy ? "Working on your last question…" : `Ask about ${projectName(currentProject(p))}…`;
 }
 
 function citationChip(c) {
@@ -501,6 +515,7 @@ function renderDiff(e) {
     `<span class="${l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : ""}">${esc(l) || " "}</span>`).join("");
   const action = e.pr ? `<a class="btn sm" href="${esc(e.pr)}" target="_blank" rel="noopener">${icon("pr")} View pull request ${icon("external")}</a>`
     : e.discarded ? `<span class="badge">Discarded</span>`
+    : e.expired ? `<span class="badge" title="Previews live on the server until it restarts. Ask for the edit again to get a new one.">Preview expired · ask again</span>`
     : `<button class="btn sm ghost" data-action="discard" data-id="${esc(e.id)}">Discard</button>
        <button class="btn sm primary" data-action="open-pr" data-id="${esc(e.id)}">${icon("pr")} Open pull request</button>`;
   return `<div class="diff"><div class="diff-head">${icon("file")}<span class="path">${esc(e.path)}</span>
@@ -520,8 +535,13 @@ async function send(text) {
   const slot = msgs.length - 1;
   try {
     const pw = S.info.people.find((x) => x.id === who);
-    msgs[slot] = { r: await api("/api/chat", { person: who, message: q, model: currentModel(pw), project: currentProject(pw) }),
+    msgs[slot] = { r: await api("/api/chat", { person: who, message: q, model: currentModel(pw), project: currentProject(pw), chat: chatId(who) }),
                    at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) };
+    const r = msgs[slot].r, proj = S.info.projects?.[r.project];
+    if (proj && r.commit && proj.commit !== r.commit) {   // main moved: the answer read the newer commit
+      proj.commit = r.commit;
+      if (S.me === who && $(".chip.repo")) $(".chip.repo").outerHTML = repoChip();
+    }
   } catch (e) {
     msgs[slot] = { error: e.message, retry: q };
   }
@@ -549,7 +569,9 @@ async function renderRail() {
       <div class="panel-body section"><ul class="caps">${all.map((t) => { const y = p.tools.includes(t);
         return `<li class="${y ? "yes" : "no"}">${icon(y ? "check" : "x")}<span>${TOOL_LABELS[t]}</span></li>`; }).join("")}
         <li class="${p.level === "build" ? "yes" : "no"}">${icon(p.level === "build" ? "check" : "x")}<span>Private dev workspace</span></li></ul>
-        ${p.allow_paths.length ? `<p class="small muted" style="margin:12px 0 0">May edit only ${p.allow_paths.map((a) => `<code>${esc(a)}</code>`).join(" ")}</p>` : ""}</div>
+        ${p.allow_paths.length ? (S.info.projects?.[currentProject(p)]?.pull_requests
+          ? `<p class="small muted" style="margin:12px 0 0">May edit only ${p.allow_paths.map((a) => `<code>${esc(a)}</code>`).join(" ")}</p>`
+          : `<p class="small muted" style="margin:12px 0 0">Edits open as pull requests only in ${esc(projectName(Object.keys(S.info.projects).find((k) => S.info.projects[k].pull_requests)))}. Here, changes go to the owning team as a request.</p>`) : ""}</div>
       <div class="panel-body section" id="budget"><div class="skeleton" style="width:60%"></div><div class="skeleton" style="margin-top:10px"></div></div>
       ${elevate ? `<div class="panel-body section"><b style="color:var(--ink);font-size:13px">Need more access?</b>
         <p class="small muted" style="margin:4px 0 10px">Ask for ${esc(cap(p.elevation_targets[0]))} for a few hours. An admin approves; it ends by itself.</p>
@@ -666,15 +688,23 @@ async function renderWorkspace(page, id) {
       <div class="panel-body"><ol class="numbered">
         <li><b>Start the Identity-Aware Proxy tunnel</b><span>Run <code>coder/tunnel.sh</code>. No VPN: only Google's IAP range can reach ports 22 and 3000, and only for signed-in people.</span></li>
         <li><b>Sign in to Coder</b><span>Open <code>http://localhost:3000</code> and sign in as <code>${esc(p.email)}</code>.</span></li>
-        <li><b>Open the team-workspace</b><span>VS Code (code-server) with ${esc(S.info.repo)} cloned to <code>~/project</code>.</span></li>
-        <li><b>Open the Gemini CLI app</b><span>It reaches the gateway through a relay on the VM, on your own key and budget.</span></li></ol>
+        <li><b>Open your workspace</b><span>Each repository has its own buttons: pick the one you want to work on (below).</span></li>
+        <li><b>VS Code or Gemini CLI, per repository</b><span>Gemini CLI reaches the gateway through a relay on the VM, on your own key and budget.</span></li></ol>
         <div class="actions" style="margin-top:16px"><a class="btn primary" href="http://localhost:3000" target="_blank" rel="noopener">${icon("external")} Open Coder</a>
           <span class="small muted">Works once the tunnel is running.</span></div></div></section>
       <section class="panel"><div class="panel-head"><h2>Guardrails</h2></div><div class="panel-body"><ul class="caps">
         <li class="yes">${icon("check")}<span>Private subnet, outbound only through Cloud NAT</span></li>
         <li class="yes">${icon("check")}<span>The VM's identity has no Vertex AI role: <code>try-vertex-directly</code> gets 403</span></li>
         <li class="yes">${icon("check")}<span>Every model call is logged under your key and counts against your budget</span></li>
-        <li class="yes">${icon("check")}<span>Only Build-level people in role.yaml get a workspace</span></li></ul></div></section></div>`;
+        <li class="yes">${icon("check")}<span>Only Build-level people in role.yaml get a workspace</span></li>
+        <li class="yes">${icon("check")}<span>Only the repositories you have access to are cloned</span></li></ul></div></section></div>
+    <section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Your repositories <span class="sub">each one is its own folder and its own buttons in Coder</span></h2></div>
+      <div class="panel-body"><div class="ws-repos">${(p.projects || []).map((k) => { const name = projectRepo(k).split("/").pop();
+        return `<article class="ws-repo"><div class="rc-top"><span class="rc-icon">${icon("branch")}</span><div style="min-width:0"><b>${esc(projectName(k))}</b>
+            <a class="small" href="https://github.com/${esc(projectRepo(k))}" target="_blank" rel="noopener">${esc(projectRepo(k))}</a></div></div>
+          <div class="small muted">Folder <code>~/projects/${esc(name)}</code></div>
+          <div class="apps"><span class="app">${icon("file")} VS Code · ${esc(name)}</span><span class="app">${icon("terminal")} Gemini CLI · ${esc(name)}</span></div>
+          <div class="small muted">Cloned and ready. Pushing uses your own GitHub access.</div></article>`; }).join("")}</div></div></section>`;
 }
 
 // ---- Govern: Overview ----------------------------------------------------------------------
@@ -861,6 +891,25 @@ function endGrant(el) {
 
 const modelLabel = (m) => S.info.catalog?.[m]?.label || m;
 const projectName = (id) => S.info.projects?.[id]?.name || id || S.info.repo;
+const projectRepo = (id) => S.info.projects?.[id]?.repo || S.info.repo;
+const projectCommit = (id) => S.info.projects?.[id]?.commit || S.info.commit;
+function repoChip() {
+  const p = me(), proj = S.route === "assistant" ? currentProject(p) : null, repo = proj ? projectRepo(proj) : S.info.repo;
+  const sha = proj ? projectCommit(proj) : S.info.commit;
+  return `<a class="chip repo" href="https://github.com/${esc(repo)}/tree/${esc(sha)}" target="_blank" rel="noopener">
+    ${icon("branch")} ${esc(repo)} <span class="mono">@${esc(sha.slice(0, 7))}</span></a>`;
+}
+// Another codebase is another conversation: the model session and the citations are per repository.
+async function switchProject(pid, proj) {
+  if (S.busy[pid]) { toast("Wait for the current answer first.", "bad"); return render(); }
+  (S.project ||= {})[pid] = proj;
+  if ((S.chats[pid] || []).length) {
+    S.chats[pid] = []; S.chatId[pid] = newChatId();
+    api("/api/reset", { person: pid }).catch(() => {});
+    toast(`New chat on ${projectName(proj)}. Your earlier chat is in History.`);
+  }
+  render();
+}
 function currentModel(p) {
   const pick = S.model?.[p.id];
   return (p.models || []).includes(pick) ? pick : p.agent_model;
@@ -868,6 +917,72 @@ function currentModel(p) {
 function currentProject(p) {
   const pick = S.project?.[p.id];
   return (p.projects || []).includes(pick) ? pick : (p.projects || [])[0];
+}
+
+// ---- saved chats ----------------------------------------------------------------------------
+// The server keeps each chat under this browser's random id and the person, for 30 days after
+// it was last used. Another browser on the same persona never sees them.
+
+const newChatId = () => (crypto.randomUUID?.() || String(Math.random()).slice(2) + Date.now()).replace(/[^A-Za-z0-9-]/g, "");
+S.chatId = {};   // person id -> id of the chat on screen
+S.restoring = {};
+const chatId = (pid) => (S.chatId[pid] ||= newChatId());
+const hhmm = (iso) => { const t = parseTime(iso); return isNaN(t) ? "" : new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
+
+async function openChat(pid, cid) {
+  const c = await api(`/api/chats/${encodeURIComponent(cid)}/open`, { person: pid });
+  S.chats[pid] = c.turns.flatMap((t) => [{ me: true, text: t.q }, { r: t.r, at: hhmm(t.at) }]);
+  S.chatId[pid] = c.id;
+  const proj = c.turns.at(-1)?.r?.project;
+  if (proj && S.info.projects?.[proj]) (S.project ||= {})[pid] = proj;
+}
+
+async function restoreChat(pid) {
+  S.restoring[pid] = true;
+  let restored = false;
+  try {
+    const { chats } = await api("/api/chats?person=" + encodeURIComponent(pid));
+    if (chats.length && !S.chats[pid]?.length && !S.busy[pid]) { await openChat(pid, chats[0].id); restored = true; }
+  } catch { /* history is a convenience: start fresh */ }
+  if (!restored && !S.chats[pid]?.length) api("/api/reset", { person: pid }).catch(() => {});
+  S.restoring[pid] = false;
+  if (S.me === pid && S.route === "assistant") restored ? render() : renderMessages();
+}
+
+async function showHistory() {
+  const who = S.me;
+  let list;
+  try { list = await api("/api/chats?person=" + encodeURIComponent(who)); } catch (e) { return toast(e.message, "bad"); }
+  const row = (c) => `<div class="chat-row ${c.id === S.chatId[who] ? "on" : ""}" data-row="${esc(c.id)}">
+      <button type="button" class="chat-open" data-open="${esc(c.id)}"><b>${esc(c.title || "Untitled chat")}</b>
+        <small>${c.project ? `${esc(projectName(c.project))} · ` : ""}${esc(ago(c.updated))} · ${c.turns} question${c.turns === 1 ? "" : "s"}${c.id === S.chatId[who] ? " · on screen" : ""}</small></button>
+      <button type="button" class="btn sm ghost icon" data-del="${esc(c.id)}" aria-label="Delete this chat" title="Delete">${icon("x")}</button></div>`;
+  modal({ title: "Saved chats", wide: true, confirm: "Close", cancelButton: false, onConfirm: () => {},
+    sub: `${me().name}'s chats in this browser only. Each is deleted ${list.keep_days} days after it was last used.`,
+    body: list.chats.length ? `<div class="chat-list">${list.chats.map(row).join("")}</div>`
+      : `<div class="empty"><b>No saved chats yet</b>Every question and answer is saved here as you go.</div>` });
+  const wrap = $$(".backdrop").at(-1);
+  wrap.addEventListener("click", async (ev) => {
+    const open = ev.target.closest("[data-open]"), del = ev.target.closest("[data-del]");
+    if (open) {
+      if (S.busy[who]) return toast("Wait for the current answer first.", "bad");
+      try { await openChat(who, open.dataset.open); } catch (e) { return toast(e.message, "bad"); }
+      $("[data-ok]", wrap).click();
+      if (S.me === who) render();   // its project may differ: picker, top bar and prompts follow
+    } else if (del) {
+      const cid = del.dataset.del;
+      del.disabled = true;
+      try { await api(`/api/chats/${encodeURIComponent(cid)}/delete`, { person: who }); }
+      catch (e) { del.disabled = false; return toast(e.message, "bad"); }
+      $(`[data-row="${CSS.escape(cid)}"]`, wrap)?.remove();
+      if (cid === S.chatId[who] && !S.busy[who]) {
+        S.chats[who] = []; S.chatId[who] = newChatId();
+        api("/api/reset", { person: who }).catch(() => {});
+        if (S.me === who) renderMessages();
+      }
+      toast("Chat deleted.");
+    }
+  });
 }
 
 // ---- Changes: pull requests opened for people without GitHub accounts ----------------------
@@ -1021,8 +1136,9 @@ async function renderPolicy(page, id) {
   const peopleAt = (lvl) => S.info.people.filter((p) => p.base_level === lvl).map((p) => esc(first(p.name))).join(", ") || "–";
   const yes = (b) => icon(b ? "check" : "x", b ? "yes" : "no");
   page.innerHTML = `<div class="page-head"><div class="t"><h1>Policy</h1>
-    <p>One file, <code>role.yaml</code>, decides every level. The app enforces tools and paths; the gateway enforces models and
-      budgets on each person's key. Version <span class="mono">${esc(S.info.policy_version)}</span>.</p></div></div>
+    <p>One file, <code>role.yaml</code>, decides every level, and admins can change models, budgets and limits right here. The app
+      enforces tools and paths; the gateway enforces models and budgets on each person's key. Version <span class="mono">${esc(S.info.policy_version)}</span>.</p></div></div>
+    <section class="panel" id="pf" style="margin-bottom:16px"><div class="panel-body"><div class="skeleton"></div></div></section>
     <div class="g2">
       <section class="panel"><div class="panel-head"><h2>Simulate a decision</h2><span class="small muted">Same rules as production</span></div>
         <div class="panel-body"><form id="sim" class="stack" style="gap:12px">
@@ -1037,7 +1153,7 @@ async function renderPolicy(page, id) {
       <section class="panel"><div class="panel-head"><h2>Role matrix</h2></div><div class="panel-body flush"><div class="table-wrap">
         <table class="table matrix"><thead><tr><th></th>${names.map((n) => `<th><span class="lvl ${n}">${n}</span></th>`).join("")}</tr></thead><tbody>
           <tr><td>People</td>${names.map((n) => `<td class="small">${peopleAt(n)}</td>`).join("")}</tr>
-          <tr><td>Models</td>${names.map((n) => `<td class="small">${L[n].models.map((m) => esc(m.replace("gemini-", ""))).join(", ")}</td>`).join("")}</tr>
+          <tr><td>Models</td>${names.map((n) => `<td class="small">${L[n].models.filter(isOn).map((m) => esc(modelLabel(m))).join(", ")}</td>`).join("")}</tr>
           <tr><td>Budget</td>${names.map((n) => `<td class="small">${money(L[n].budget_usd)}</td>`).join("")}</tr>
           ${Object.keys(TOOL_LABELS).map((t) => `<tr><td>${TOOL_LABELS[t]}</td>${names.map((n) => `<td>${yes(L[n].tools.includes(t))}</td>`).join("")}</tr>`).join("")}
           <tr><td>Private workspace</td>${names.map((n) => `<td>${yes(n === "build")}</td>`).join("")}</tr>
@@ -1047,14 +1163,14 @@ async function renderPolicy(page, id) {
     <section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Model catalog <span class="sub">one gateway, many providers; each key decides who may use what</span></h2></div>
       <div class="panel-body flush"><table class="table"><thead><tr><th>Model</th><th>Provider</th><th>Status</th><th>Levels</th></tr></thead><tbody>
       ${Object.entries(S.info.catalog || {}).map(([k, v]) => `<tr><td><b style="font-weight:600">${esc(v.label)}</b><div class="hash">${esc(k)}</div></td>
-        <td>${esc(v.provider)}</td><td>${v.status === "enabled" ? '<span class="badge ok">Enabled</span>' : `<span class="badge" title="${esc(v.note || "")}">Available</span><div class="small muted" style="margin-top:4px;max-width:340px">${esc(v.note || "")}</div>`}</td>
+        <td>${esc(v.provider)}</td><td>${v.status === "enabled" ? '<span class="badge ok">Enabled</span>' : `<span class="badge" title="${esc(v.note || "")}">${v.status === "setup" ? "Needs setup" : "Off · ready"}</span><div class="small muted" style="margin-top:4px;max-width:340px">${esc(v.note || "")}</div>`}</td>
         <td>${Object.entries(L).filter(([, l]) => l.models.includes(k)).map(([n]) => `<span class="lvl ${n}">${n}</span>`).join(" ") || '<span class="muted small">none yet</span>'}</td></tr>`).join("")}
       </tbody></table></div></section>
     <section class="panel" style="margin-top:16px"><div class="panel-head"><h2>role.yaml</h2><span class="hash">sha256 ${esc(S.info.policy_version)}…</span></div>
       <div class="panel-body flush" id="yaml"><div class="panel-body"><div class="skeleton"></div></div></div></section>`;
   const fillList = () => {
     const a = $("#sim-action").value, v = $("#sim-value");
-    const opts = a === "edit" ? S.info.files : a === "model" ? ["gemini-flash", "gemini-pro"] : a === "tool" ? Object.keys(TOOL_LABELS) : [];
+    const opts = a === "edit" ? S.info.files : a === "model" ? Object.keys(S.info.catalog || {}) : a === "tool" ? Object.keys(TOOL_LABELS) : [];
     $("#sim-list").innerHTML = opts.map((o) => `<option value="${esc(o)}">`).join("");
     $("#sim-value-field").hidden = !opts.length;
     if (opts.length && !opts.includes(v.value)) v.value = a === "edit" ? "lib/score.mjs" : opts[opts.length - 1];
@@ -1074,11 +1190,267 @@ async function renderPolicy(page, id) {
   try {
     const pol = await api("/api/policy?person=" + S.me);
     if (id !== S.renderId) return;
+    renderPolicyForm(pol);
     $("#yaml").innerHTML = `<pre class="code">${pol.source.split("\n").map((l) => {
       const e = esc(l), c = e.indexOf("#");
       const body = c >= 0 ? e.slice(0, c) : e, comment = c >= 0 ? `<span class="c">${e.slice(c)}</span>` : "";
       return body.replace(/^(\s*-?\s*)([\w-]+)(:)/, '$1<span class="k">$2</span>$3') + comment; }).join("\n")}</pre>`;
   } catch (e) { if (id === S.renderId) $("#yaml").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+// ---- Govern: Repo access -------------------------------------------------------------------
+// Who may ask about and work on each repository. Search people and repositories, switch access
+// per person, review, save. The assistant follows at once; Build workspaces at their next start.
+
+const initials = (name) => String(name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2);
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+
+async function renderRepoAccess(page, id) {
+  page.innerHTML = `<div class="page-head"><div class="t"><h1>Repo access</h1>
+      <p>Who can ask about and work on each repository. The assistant follows a change at once; Build workspaces clone the
+        new list at their next start.</p></div>
+      <div class="actions"><button class="btn" data-action="refresh">${icon("refresh")} Refresh</button></div></div>
+    <div class="ra-tools">
+      <label class="search">${icon("search")}<input class="input" id="ra-q" type="search" placeholder="Search people by name, email, team or level" autocomplete="off"></label>
+      <label class="search narrow">${icon("branch")}<input class="input" id="ra-rq" type="search" placeholder="Filter repositories" autocomplete="off"></label>
+    </div>
+    <div id="ra"><section class="panel"><div class="panel-body"><div class="skeleton"></div><div class="skeleton" style="margin-top:10px"></div></div></section></div>`;
+  let d;
+  try { d = await api("/api/govern/access?person=" + S.me); }
+  catch (e) { if (id === S.renderId) $("#ra").innerHTML = `<div class="callout bad">${icon("alert")}<div><b>${esc(e.message)}</b></div></div>`; return; }
+  if (id !== S.renderId) return;
+  S.ra = { d, draft: Object.fromEntries(d.people.map((p) => [p.id, [...p.projects]])) };
+  $("#ra-q").addEventListener("input", paintRepoAccess);
+  $("#ra-rq").addEventListener("input", paintRepoAccess);
+  $("#ra").addEventListener("click", onRepoAccessClick);
+  paintRepoAccess();
+}
+
+function raVisible() {
+  const { d } = S.ra, q = ($("#ra-q")?.value || "").trim().toLowerCase(), rq = ($("#ra-rq")?.value || "").trim().toLowerCase();
+  const people = d.people.filter((p) => !q || [p.name, p.email, p.team, p.level, p.title].some((v) => String(v || "").toLowerCase().includes(q)));
+  const repos = Object.keys(d.projects).filter((k) => { const v = d.projects[k]; return !rq || [k, v.name, v.repo, v.team].some((x) => String(x || "").toLowerCase().includes(rq)); });
+  return { people, repos };
+}
+
+function raChanges() {
+  const { d, draft } = S.ra, out = [];
+  d.people.forEach((p) => {
+    const now = draft[p.id], add = now.filter((x) => !p.projects.includes(x)), rem = p.projects.filter((x) => !now.includes(x));
+    if (add.length || rem.length) out.push({ id: p.id, name: p.name, add, rem, empty: !now.length });
+  });
+  return out;
+}
+
+function paintRepoAccess() {
+  const box = $("#ra");
+  if (!box || !S.ra) return;
+  const { d, draft } = S.ra, { people, repos } = raVisible(), P = d.projects;
+  const holders = (k) => d.people.filter((p) => draft[p.id].includes(k));
+  const cards = repos.map((k) => { const v = P[k], hs = holders(k);
+    return `<article class="repo-card"><div class="rc-top"><span class="rc-icon">${icon("branch")}</span>
+        <div style="min-width:0"><b>${esc(v.name)}</b><a class="small" href="https://github.com/${esc(v.repo)}/tree/${esc(v.commit)}" target="_blank" rel="noopener">${esc(v.repo)}</a></div></div>
+      <div class="rc-tags">${v.pull_requests ? `<span class="badge ok">${icon("pr")} Questions + pull requests</span>` : `<span class="badge">${icon("message")} Questions + workspace</span>`}
+        <span class="badge">${icon("users")} ${esc(v.team || "no team")}${v.owner ? ` · ${esc(first(S.info.people.find((x) => x.id === v.owner)?.name || v.owner))}` : ""}</span></div>
+      <div class="rc-foot"><div class="avatars">${hs.slice(0, 6).map((p) => `<span class="avatar sm ${p.level}" title="${esc(p.name)}">${esc(initials(p.name))}</span>`).join("")}</div>
+        <span class="small muted">${hs.length} of ${d.people.length} people · ${v.files} files</span></div>
+      <div class="rc-sync"><span class="small muted">${icon("branch")} main at <a class="mono" href="https://github.com/${esc(v.repo)}/commit/${esc(v.commit)}" target="_blank" rel="noopener">${esc(v.commit.slice(0, 7))}</a>
+          ${v.checked ? `· checked ${esc(ago(v.checked))}` : "· from the deploy"}</span>
+        <button class="btn sm ghost" data-ra-sync="${esc(k)}" title="Fetch the newest main from GitHub now. Answers also check on their own, at most once a minute.">${icon("refresh")} Sync now</button></div>
+      <div class="rc-actions"><button class="btn sm ghost" data-ra-all="${esc(k)}" ${people.length ? "" : "disabled"}>${icon("check")} Give ${people.length === d.people.length ? "everyone" : `these ${people.length}`}</button>
+        <button class="btn sm ghost" data-ra-none="${esc(k)}" ${people.length ? "" : "disabled"}>${icon("x")} Remove ${people.length === d.people.length ? "everyone" : `these ${people.length}`}</button></div></article>`; }).join("");
+  const rows = people.map((p) => { const base = d.people.find((x) => x.id === p.id), custom = !sameSet(draft[p.id], base.default);
+    return `<tr><td><div class="person"><span class="avatar ${p.level}">${esc(initials(p.name))}</span><div><b>${esc(p.name)}</b>
+        <small>${esc(p.email || p.title)}${p.onboarded ? " · added in RoleSpace" : ""}</small></div></div></td>
+      <td><span class="lvl ${p.level}">${p.level}</span></td><td class="small muted">${esc(p.team)}</td>
+      ${repos.map((k) => { const on = draft[p.id].includes(k), was = base.projects.includes(k);
+        return `<td><button type="button" class="acc ${on !== was ? "changed" : ""}" aria-pressed="${on}" data-ra-toggle="${esc(p.id)}|${esc(k)}"
+          aria-label="${esc(p.name)}: ${esc(P[k].name)}">${icon(on ? "check" : "lock")}<span>${on ? "Access" : "No access"}</span></button></td>`; }).join("")}
+      <td class="num">${custom ? `<button type="button" class="btn sm ghost" data-ra-reset="${esc(p.id)}" title="Back to role.yaml or onboarding: ${esc(base.default.map((k) => P[k]?.name || k).join(", "))}">Reset</button>` : `<span class="small muted">Default</span>`}</td></tr>`; }).join("");
+  const ch = raChanges(), bad = ch.filter((c) => c.empty);
+  box.innerHTML = `<div class="repo-cards">${cards || `<div class="empty"><b>No repository matches</b>Try another name.</div>`}</div>
+    <section class="panel"><div class="panel-head"><h2>People <span class="sub">${people.length} of ${d.people.length} shown</span></h2>
+      <span class="small muted" style="margin-left:auto">${d.changed_by ? `${icon("info")} Last changed by ${esc(S.info.people.find((x) => x.id === d.changed_by)?.name || d.changed_by)}, ${esc(ago(d.changed_at))}` : "Everyone has role.yaml's defaults"}</span></div>
+      <div class="panel-body flush"><div class="table-wrap"><table class="table ra-table"><thead><tr><th>Person</th><th>Level</th><th>Team</th>
+        ${repos.map((k) => `<th><div class="ra-col"><b>${esc(P[k].name)}</b><span class="mono">${esc(P[k].repo.split("/").pop())}</span></div></th>`).join("")}<th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="${4 + repos.length}"><div class="empty"><b>No one matches</b>Search by name, email, team or level.</div></td></tr>`}</tbody></table></div></div></section>
+    ${ch.length ? `<div class="ra-bar" role="region" aria-label="Unsaved changes">
+      <div style="flex:1;min-width:0"><b>${ch.length} ${ch.length === 1 ? "person" : "people"} changed</b>
+        <span class="small">${bad.length ? `${icon("alert")} ${esc(bad.map((c) => first(c.name)).join(", "))} would have no repository: give at least one.`
+          : esc(ch.map((c) => `${first(c.name)}: ${[...c.add.map((k) => "+" + P[k].name), ...c.rem.map((k) => "−" + P[k].name)].join(", ")}`).join(" · "))}</span></div>
+      <button type="button" class="btn sm" data-ra-discard>Discard</button>
+      <button type="button" class="btn sm primary" data-ra-save ${bad.length ? "disabled" : ""}>${icon("check")} Review and save</button></div>` : ""}`;
+}
+
+function onRepoAccessClick(ev) {
+  const t = ev.target.closest("button");
+  if (!t || !S.ra) return;
+  const { d, draft } = S.ra, order = Object.keys(d.projects), sorted = (xs) => order.filter((k) => xs.includes(k));
+  if (t.dataset.raToggle) {
+    const [pid, k] = t.dataset.raToggle.split("|"), cur = draft[pid];
+    draft[pid] = sorted(cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]);
+  } else if (t.dataset.raAll || t.dataset.raNone) {
+    const k = t.dataset.raAll || t.dataset.raNone;
+    raVisible().people.forEach((p) => { draft[p.id] = sorted(t.dataset.raAll ? [...new Set([...draft[p.id], k])] : draft[p.id].filter((x) => x !== k)); });
+  } else if (t.dataset.raReset) {
+    draft[t.dataset.raReset] = [...d.people.find((p) => p.id === t.dataset.raReset).default];
+  } else if (t.hasAttribute("data-ra-discard")) {
+    S.ra.draft = Object.fromEntries(d.people.map((p) => [p.id, [...p.projects]]));
+  } else if (t.hasAttribute("data-ra-save")) {
+    return saveRepoAccess();
+  } else if (t.dataset.raSync) {
+    return syncRepo(t);
+  } else return;
+  paintRepoAccess();
+}
+
+async function syncRepo(btn) {
+  const k = btn.dataset.raSync, name = S.ra.d.projects[k].name;
+  btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Syncing…`;
+  try {
+    const r = await api(`/api/govern/repos/${encodeURIComponent(k)}/sync`, { person: S.me });
+    S.ra.d = { ...S.ra.d, projects: r.projects };
+    toast(r.sync.changed ? `${name} is now at ${r.sync.commit.slice(0, 7)} (was ${r.sync.previous.slice(0, 7)}). The next answer uses it.`
+      : `${name} is already at the newest main (${r.sync.commit.slice(0, 7)}).`);
+    if (S.info.projects?.[k]) S.info.projects[k].commit = r.sync.commit;
+    paintRepoAccess();
+  } catch (e) { toast(e.message, "bad"); btn.disabled = false; btn.innerHTML = `${icon("refresh")} Sync now`; }
+}
+
+function saveRepoAccess() {
+  const ch = raChanges(), P = S.ra.d.projects;
+  if (!ch.length || ch.some((c) => c.empty)) return;
+  modal({ title: "Save repo access?", confirm: "Save access",
+    sub: "The assistant follows at once. Build workspaces clone the new list at their next start, after coder/sync_build_keys.sh. It's recorded in the audit log under your name.",
+    body: `<div class="plan"><b>What changes</b><ul>${ch.map((c) => `<li><b>${esc(c.name)}</b>: ${[
+      ...c.add.map((k) => `<span class="delta add">+ ${esc(P[k].name)}</span>`), ...c.rem.map((k) => `<span class="delta rem">− ${esc(P[k].name)}</span>`)].join(" ")}</li>`).join("")}</ul></div>`,
+    onConfirm: async () => {
+      const r = await api("/api/govern/access", { person: S.me, people: Object.fromEntries(ch.map((c) => [c.id, S.ra.draft[c.id]])) });
+      S.ra = { d: r, draft: Object.fromEntries(r.people.map((p) => [p.id, [...p.projects]])) };
+      toast(`Repo access saved for ${ch.length} ${ch.length === 1 ? "person" : "people"}.`);
+      paintRepoAccess();
+      refreshPeople();
+    } });
+}
+
+// ---- Govern: Policy form (no YAML needed) -------------------------------------------------
+// Each level's models, budget and rate limits, and which models are switched on. Saving stores the
+// change on top of role.yaml, pushes it to every person's gateway key and writes an audit event.
+
+const isOn = (m) => (S.info.catalog?.[m]?.status || "enabled") === "enabled";
+const PF_FIELDS = [["budget_usd", "Budget per person (USD)", 0.5], ["rpm_limit", "Requests per minute", 1], ["tpm_limit", "Tokens per minute", 1000]];
+
+function renderPolicyForm(pol) {
+  const box = $("#pf");
+  if (!box) return;
+  const L = S.info.levels, names = Object.keys(L), cat = S.info.catalog || {}, lim = pol.limits || {};
+  const edited = pol.changed_by ? `Edited in RoleSpace by ${esc(S.info.people.find((x) => x.id === pol.changed_by)?.name || pol.changed_by)}, ${esc(ago(pol.changed_at))}`
+    : "Same as role.yaml";
+  box.innerHTML = `<div class="panel-head"><h2>Access by level <span class="sub">tick a box, save, and everyone's key follows. No YAML needed</span></h2>
+      <span class="small muted" style="margin-left:auto;margin-right:10px">${icon("info")} ${edited}</span>
+      <button class="btn sm ghost" type="button" data-pf="sync" title="Write the policy in force to every person's gateway key again (models and limits)">${icon("refresh")} Push to keys</button>
+      <button class="btn sm" type="button" data-pf="reset" ${pol.changed_by ? "" : "disabled"}>Reset to role.yaml</button></div>
+    <form id="pf-form" class="panel-body flush" novalidate><div class="table-wrap"><table class="table matrix pf">
+      <thead><tr><th>Model</th><th>Switched on</th>${names.map((n) => `<th><span class="lvl ${n}">${n}</span></th>`).join("")}</tr></thead><tbody>
+      ${Object.entries(cat).map(([k, v]) => { const on = v.status === "enabled", setup = v.status === "setup";
+        return `<tr data-model="${esc(k)}" class="${on ? "" : "off"}"><td><b style="font-weight:600">${esc(v.label)}</b>
+          <div class="small muted">${esc(v.provider)}</div>${v.note ? `<div class="small muted pf-note">${esc(v.note)}</div>` : ""}</td>
+          <td><label class="switch" title="${esc(setup ? "Needs the one-time setup in the note first" : on ? "Switch off for everyone" : "Switch on")}">
+            <input type="checkbox" name="on:${esc(k)}" ${on ? "checked" : ""} ${setup ? "disabled" : ""} aria-label="${esc(v.label)} switched on"><i></i></label></td>
+          ${names.map((n) => `<td><input type="checkbox" name="lv:${n}:${esc(k)}" ${L[n].models.includes(k) && on ? "checked" : ""} ${on ? "" : "disabled"}
+            aria-label="${esc(v.label)} at ${n} level"></td>`).join("")}</tr>`; }).join("")}
+      ${PF_FIELDS.map(([f, label, step]) => { const [lo, hi] = lim[f] || [0, 1e9];
+        return `<tr class="pf-num"><td><b style="font-weight:600">${label}</b>${f === "budget_usd" ? `<div class="small muted">per ${esc(S.info.budget_period)}; saving a new value resets that level's keys</div>` : ""}</td><td></td>
+        ${names.map((n) => `<td><input class="input sm" type="number" name="${f}:${n}" min="${lo}" max="${hi}" step="${step}" value="${esc(L[n][f] ?? "")}" aria-label="${label}, ${n}"></td>`).join("")}</tr>`; }).join("")}
+      </tbody></table></div>
+      <div class="panel-foot" style="display:flex;align-items:center;gap:12px"><span id="pf-diff" class="small muted" style="flex:1">No unsaved changes.</span>
+        <button class="btn sm" type="button" data-pf="undo" disabled>Undo</button>
+        <button class="btn sm primary" type="submit" disabled>${icon("check")} Review and save</button></div></form>`;
+  const form = $("#pf-form"), save = $("button[type=submit]", form), undo = $("[data-pf=undo]", form);
+  const read = () => {
+    const fd = new FormData(form), models = {}, levels = {};
+    Object.entries(cat).forEach(([k, v]) => { if (v.status !== "setup") models[k] = fd.get("on:" + k) ? "enabled" : "available"; });
+    names.forEach((n) => {
+      levels[n] = { models: Object.keys(cat).filter((k) => fd.get(`lv:${n}:${k}`)) };
+      PF_FIELDS.forEach(([f]) => { const v = parseFloat(fd.get(`${f}:${n}`)); levels[n][f] = f === "budget_usd" ? v : Math.round(v); });
+    });
+    return { levels, models };
+  };
+  const changes = (x) => {
+    const out = [];
+    Object.entries(x.models).forEach(([k, st]) => { if (st !== cat[k].status) out.push(`${cat[k].label} switched ${st === "enabled" ? "on" : "off"}`); });
+    names.forEach((n) => {
+      const a = x.levels[n], b = L[n], N = cap(n), was = b.models.filter(isOn);
+      const add = a.models.filter((m) => !was.includes(m)), rem = was.filter((m) => !a.models.includes(m));
+      if (add.length) out.push(`${N}: add ${add.map(modelLabel).join(", ")}`);
+      if (rem.length) out.push(`${N}: remove ${rem.map(modelLabel).join(", ")}`);
+      if (a.budget_usd !== b.budget_usd) out.push(`${N}: budget ${money(b.budget_usd)} → ${isFinite(a.budget_usd) ? money(a.budget_usd) : "?"}`);
+      if (a.rpm_limit !== b.rpm_limit) out.push(`${N}: ${b.rpm_limit} → ${a.rpm_limit} requests/min`);
+      if (a.tpm_limit !== b.tpm_limit) out.push(`${N}: ${tok(b.tpm_limit)} → ${tok(a.tpm_limit)} tokens/min`);
+    });
+    return out;
+  };
+  const problems = (x) => {
+    const out = [];
+    names.forEach((n) => {
+      if (!x.levels[n].models.length) out.push(`${cap(n)} needs at least one model`);
+      PF_FIELDS.forEach(([f, label]) => { const v = x.levels[n][f], [lo, hi] = lim[f] || [0, 1e12];
+        if (!isFinite(v) || v < lo || v > hi) out.push(`${cap(n)}: ${label} must be ${lo.toLocaleString()} to ${hi.toLocaleString()}`); });
+    });
+    return out;
+  };
+  const sync = () => {
+    $$("tr[data-model]", form).forEach((tr) => {   // a switched-off model can't be given to a level
+      const k = tr.dataset.model, on = form.elements["on:" + k]?.checked ?? false;
+      tr.classList.toggle("off", !on);
+      names.forEach((n) => { const c = form.elements[`lv:${n}:${k}`]; c.disabled = !on; if (!on) c.checked = false; });
+    });
+    const x = read(), ch = changes(x), bad = problems(x);
+    save.disabled = !ch.length || bad.length > 0;
+    undo.disabled = !ch.length;
+    $("#pf-diff").innerHTML = bad.length ? `<span style="color:#b91c1c">${icon("alert")} ${esc(bad[0])}</span>`
+      : ch.length ? `<b style="color:var(--ink)">${ch.length} unsaved change${ch.length === 1 ? "" : "s"}:</b> ${esc(ch.slice(0, 3).join("; "))}${ch.length > 3 ? "…" : ""}`
+      : "No unsaved changes.";
+  };
+  form.addEventListener("input", sync);
+  form.addEventListener("change", (ev) => {   // switching a model on offers it to the levels that had it in role.yaml
+    const m = ev.target.name?.startsWith("on:") && ev.target.checked ? ev.target.name.slice(3) : null;
+    if (m) names.forEach((n) => { if (L[n].models.includes(m)) form.elements[`lv:${n}:${m}`].checked = true; });
+    sync();
+  });
+  undo.addEventListener("click", () => renderPolicyForm(pol));
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const x = read(), ch = changes(x);
+    if (!ch.length || problems(x).length) return;
+    const affected = S.info.people.length;
+    modal({ title: "Save policy changes?", confirm: "Save and update keys",
+      sub: `RoleSpace stores this on top of role.yaml, updates the gateway keys of all ${affected} people right away, and records it in the audit log under your name.`,
+      body: `<div class="plan"><b>What changes</b><ul>${ch.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></div>`,
+      onConfirm: async () => {
+        const r = await api("/api/govern/policy", { person: S.me, ...x });
+        r.failed.length ? toast(`Saved, but ${r.failed.length} key${r.failed.length === 1 ? "" : "s"} didn't update (${r.failed.join(", ")}). Save again to retry.`, "bad")
+          : toast(`Policy saved. ${r.updated.length} gateway keys updated.`);
+        await refreshPeople(); render();
+      } });
+  });
+  $("[data-pf=sync]", box)?.addEventListener("click", async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try {
+      const r = await api("/api/govern/policy/sync", { person: S.me });
+      r.failed.length ? toast(`${r.updated.length} keys updated; ${r.failed.join(", ")} failed. Try again.`, "bad")
+        : toast(`All ${r.updated.length} gateway keys match the policy now.`);
+    } catch (e) { toast(e.message, "bad"); }
+    btn.disabled = false;
+  });
+  $("[data-pf=reset]", box)?.addEventListener("click", () => modal({ title: "Reset to role.yaml?", danger: true, confirm: "Reset",
+    sub: "Drops every change made here. role.yaml alone decides again, and everyone's gateway key goes back to it.",
+    body: "", onConfirm: async () => {
+      const r = await api("/api/govern/policy/reset", { person: S.me });
+      toast(r.changes.length ? `Back to role.yaml: ${r.changes.length} change${r.changes.length === 1 ? "" : "s"} undone.` : "Already the same as role.yaml.");
+      await refreshPeople(); render();
+    } }));
 }
 
 // ---- Govern: Audit log ---------------------------------------------------------------------
@@ -1089,7 +1461,9 @@ const KIND = {
   budget_changed: ["", "Budget changed"], access_suspended: ["bad", "Access suspended"], access_restored: ["ok", "Access restored"],
   access_requested: ["", "Access requested"], elevation_granted: ["info", "Elevation granted"], elevation_denied: ["", "Elevation denied"],
   elevation_ended: ["", "Elevation ended"], request_updated: ["", "Request updated"], evidence_exported: ["", "Evidence exported"],
-  handoff_drafted: ["", "Handoff drafted"],
+  handoff_drafted: ["", "Handoff drafted"], member_added: ["ok", "Member added"], member_removed: ["", "Member removed"],
+  policy_changed: ["info", "Policy changed"], policy_reset: ["", "Policy reset"], policy_synced: ["", "Keys synced"],
+  repo_access_changed: ["info", "Repo access changed"],
 };
 const kindBadge = (k) => { const [c, l] = KIND[k] || ["", k.replace(/_/g, " ")]; return `<span class="badge ${c}">${esc(l)}</span>`; };
 
@@ -1143,9 +1517,10 @@ const ACTIONS = {
   prompt: (el) => send(el.dataset.text),
   "new-chat": async () => {
     if (S.busy[S.me]) return toast("Wait for the current answer first.", "bad");
-    try { await api("/api/reset", { person: S.me }); S.chats[S.me] = []; renderMessages(); $("#q")?.focus(); }
+    try { await api("/api/reset", { person: S.me }); S.chats[S.me] = []; S.chatId[S.me] = newChatId(); renderMessages(); $("#q")?.focus(); }
     catch (e) { toast(e.message, "bad"); }
   },
+  "chat-history": () => showHistory(),
   "open-pr": async (el) => {
     const id = el.dataset.id, who = S.me;
     el.disabled = true; el.innerHTML = `<span class="spinner"></span> Opening…`;
@@ -1174,7 +1549,7 @@ const ACTIONS = {
   "why-tool": async (el) => {
     const slot = el.closest(".callout").querySelector(".why-slot");
     el.disabled = true;
-    try { slot.innerHTML = whySteps(await api("/api/policy/explain", { person: S.me, target: S.me, action: "tool", value: "propose_edit" })); }
+    try { slot.innerHTML = whySteps(await api("/api/policy/explain", { person: S.me, target: S.me, action: "tool", value: "propose_edit", project: currentProject(me()) })); }
     catch (e) { slot.innerHTML = `<div class="small">${esc(e.message)}</div>`; }
   },
   "welcome-start": (el) => { localStorage.rsWelcomed = "1"; $(".backdrop.onboard")?.remove(); if (el.dataset.id !== S.me) setPersona(el.dataset.id); },

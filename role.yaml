@@ -2,39 +2,53 @@
 # RoleSpace reads this file. The model gateway enforces each level's models and budget on the
 # person's own key; RoleSpace code enforces tools and paths. Run gateway/provision_keys.py
 # (and coder/sync_build_keys.sh for Build) after editing.
+# A Govern admin can also change each level's models, budget and limits, and switch models on
+# or off, in the app (Govern > Policy) without touching this file. Those changes are stored in
+# Firestore, sit on top of this file, and are pushed to everyone's gateway key at once.
 
 company: FirstRound
 company_domain: firstround.example   # onboarding accepts work emails on this domain only
 repo: praveensaharan/firstround-demo
 
 # Projects: a repository and the team that owns it. A person works on the projects listed
-# for them (all of them when none are listed).
+# for them (all of them when none are listed), switches between them in the assistant, and
+# finds all of them cloned in a Build workspace. pull_requests: Suggest-level edits become pull
+# requests only here (the repo has the designer-allowlist CI check and the GitHub token).
 projects:
   firstround:
     name: FirstRound screening app
     repo: praveensaharan/firstround-demo
     team: screening
+    pull_requests: true
+  rolespace:
+    name: RoleSpace
+    repo: praveensaharan/RoleSpace
+    team: platform
+  screener:
+    name: FirstRound original screener
+    repo: praveensaharan/firstround
+    team: screening
 
-# Every model the gateway can serve. Levels pick from the enabled ones. "available" models need
-# a one-time step (the note) before an admin switches them on in gateway/config.yaml.
+# Every model the gateway can serve (gateway/config.yaml). Levels pick from the enabled ones.
+# status: enabled = in use | available = served by the gateway, an admin can switch it on in
+# Govern > Policy | setup = needs the one-time step in the note first.
 models:
-  gemini-flash: {label: Gemini 3.8 Flash, provider: Google · Vertex AI, status: enabled}
-  gemini-pro:   {label: Gemini 3.1 Pro, provider: Google · Vertex AI, status: enabled}
-  claude-opus:  {label: Claude Opus 5.5, provider: Anthropic on Vertex AI, status: available,
-                 note: "Enable Claude in Vertex AI Model Garden, then uncomment it in gateway/config.yaml"}
-  openai-codex: {label: OpenAI Codex, provider: OpenAI (customer's own key), status: available,
-                 note: "Store an OpenAI API key in Secret Manager, then uncomment it in gateway/config.yaml"}
+  gemini-flash:  {label: Gemini 3.8 Flash, provider: Google · Vertex AI, status: enabled}
+  gemini-pro:    {label: Gemini 3.1 Pro, provider: Google · Vertex AI, status: enabled}
+  kimi-k2:       {label: Kimi K2 Thinking, provider: Moonshot AI · Vertex AI, status: enabled}
+  qwen-coder:    {label: Qwen3 Coder 480B, provider: Alibaba Qwen · Vertex AI, status: enabled}
+  deepseek:      {label: DeepSeek V3.2, provider: DeepSeek · Vertex AI, status: available}
 
 levels:
   ask:      # PM: questions about the code, answers with checked citations, no writes
-    models: [gemini-flash]
+    models: [gemini-flash, kimi-k2]
     budget_usd: 2.00
     rpm_limit: 30           # per person's key: stops runaway loops, not normal use
     tpm_limit: 1000000       # an answer reads ~13K tokens per model call
     agent_model: gemini-flash
     tools: [list_files, search_code, read_file, draft_request]
   suggest:  # designer: small edits inside the allow-list, as a PR a human merges
-    models: [gemini-flash, gemini-pro]
+    models: [gemini-flash, gemini-pro, kimi-k2, qwen-coder]
     budget_usd: 1.00
     rpm_limit: 60
     tpm_limit: 2000000
@@ -43,7 +57,7 @@ levels:
     allow_paths: ["public/css/**", "public/**/*.html"]
     deny_paths: ["lib/**", "server.mjs"]   # listed for clarity; anything not allowed is denied
   build:    # developer: Coder workspace with Gemini CLI
-    models: [gemini-flash, gemini-pro]
+    models: [gemini-flash, gemini-pro, kimi-k2, qwen-coder]
     budget_usd: 10.00
     rpm_limit: 120
     tpm_limit: 4000000

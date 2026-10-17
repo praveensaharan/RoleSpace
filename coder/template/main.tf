@@ -1,5 +1,5 @@
 # RoleSpace team workspace: a Docker dev container on coder-vm (private subnet, no public IP),
-# with VS Code in the browser, the team repo cloned, and Gemini CLI on the person's own
+# with VS Code in the browser, the team's repos cloned, and Gemini CLI on the person's own
 # gateway key. The VM's service account can't call Vertex AI, so the gateway is the only way
 # to a model.
 
@@ -14,8 +14,8 @@ terraform {
   }
 }
 
-variable "repo_url" {
-  description = "Git repo cloned into ~/project on first start (empty = no clone)"
+variable "repo_urls" {
+  description = "Fallback when a person has no repo list on the VM: git repos (space-separated) cloned into ~/projects/<repo name>"
   type        = string
   default     = ""
 }
@@ -37,6 +37,13 @@ locals {
   # Written by sync_build_keys.sh for Build-level people in role.yaml only.
   key_file    = "/var/lib/rolespace/build-keys/${local.username}"
   gateway_key = fileexists(local.key_file) ? trimspace(file(local.key_file)) : ""
+  # The repositories this person has access to (RoleSpace > Repo access), one git URL per line,
+  # written by sync_build_keys.sh next to the key. Each gets a folder and its own buttons.
+  repos_file = "/var/lib/rolespace/build-repos/${local.username}"
+  repo_urls  = compact(split(fileexists(local.repos_file) ? "\n" : " ", fileexists(local.repos_file) ? trimspace(file(local.repos_file)) : var.repo_urls))
+  repos      = { for u in local.repo_urls : trimsuffix(basename(u), ".git") => u }
+  repo_names = [for u in local.repo_urls : trimsuffix(basename(u), ".git")]
+  projects_port = 8770
 }
 
 resource "coder_agent" "main" {
@@ -57,10 +64,22 @@ resource "coder_agent" "main" {
      "privacy": {"usageStatisticsEnabled": false}}
     JSON
 
-    if [ -n "${var.repo_url}" ] && [ ! -d ~/project/.git ]; then
-      git clone --depth 50 "${var.repo_url}" ~/project
+    # Every project gets its own folder under ~/projects. A workspace made before projects keeps
+    # its ~/project clone (and any work in it), shown among the others under its repo name.
+    mkdir -p ~/projects
+    if [ -d ~/project/.git ]; then
+      name=$(basename "$(git -C ~/project remote get-url origin 2>/dev/null || echo project)" .git)
+      [ -e ~/projects/$name ] || ln -s ~/project ~/projects/$name
     fi
-    mkdir -p ~/project
+    for url in ${join(" ", local.repo_urls)}; do
+      name=$(basename "$url" .git)
+      [ -e ~/projects/$name ] || git clone --depth 50 "$url" ~/projects/$name || echo "could not clone $url"
+    done
+
+    # The Projects page (projects.py): one row per repo, VS Code on one side, Gemini CLI on the other.
+    mkdir -p ~/.rolespace
+    echo "${base64encode(file("${path.module}/projects.py"))}" | base64 -d > ~/.rolespace/projects.py
+    nohup python3 ~/.rolespace/projects.py ${local.projects_port} ${join(" ", local.repo_names)} > /tmp/projects.log 2>&1 &
   EOT
 
   env = {
@@ -92,20 +111,55 @@ resource "coder_agent" "main" {
 }
 
 module "code-server" {
-  count    = data.coder_workspace.me.start_count
-  source   = "registry.coder.com/coder/code-server/coder"
-  version  = "~> 1.0"
-  agent_id = coder_agent.main.id
-  folder   = "/home/coder/project"
-  order    = 1
+  count        = data.coder_workspace.me.start_count
+  source       = "registry.coder.com/coder/code-server/coder"
+  version      = "~> 1.0"
+  agent_id     = coder_agent.main.id
+  folder       = "/home/coder/projects"
+  display_name = "All repos"
+  group        = "VS Code"
+  order        = 90
+}
+
+# The Projects page: every repo as a row, with its VS Code and Gemini CLI side by side.
+resource "coder_app" "projects" {
+  agent_id     = coder_agent.main.id
+  slug         = "projects"
+  display_name = "Projects"
+  icon         = "/icon/folder.svg"
+  url          = "http://localhost:${local.projects_port}/"
+  subdomain    = false
+  share        = "owner"
+  order        = 0
+  healthcheck {
+    url       = "http://localhost:${local.projects_port}/"
+    interval  = 5
+    threshold = 6
+  }
+}
+
+# One VS Code and one Gemini CLI entry per repository, grouped, so Coder shows two tidy menus.
+resource "coder_app" "code" {
+  for_each     = local.repos
+  agent_id     = coder_agent.main.id
+  slug         = substr("code-${lower(replace(each.key, "/[^A-Za-z0-9]+/", "-"))}", 0, 32)
+  display_name = each.key
+  group        = "VS Code"
+  icon         = "/icon/code.svg"
+  url          = "http://localhost:13337/?folder=/home/coder/projects/${each.key}"
+  subdomain    = false
+  share        = "owner"
+  order        = 1
 }
 
 resource "coder_app" "gemini" {
+  for_each     = local.repos
   agent_id     = coder_agent.main.id
-  slug         = "gemini"
-  display_name = "Gemini CLI"
+  slug         = substr("gemini-${lower(replace(each.key, "/[^A-Za-z0-9]+/", "-"))}", 0, 32)
+  display_name = each.key
+  group        = "Gemini CLI"
   icon         = "/icon/gemini.svg"
-  command      = "cd ~/project && gemini"
+  command      = "cd ~/projects/${each.key} && gemini"
   order        = 2
 }
 

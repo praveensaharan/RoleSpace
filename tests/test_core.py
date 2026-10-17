@@ -64,12 +64,125 @@ def test_citation_parser_skips_non_citations_and_duplicates():
 
 def test_models_follow_the_level_and_the_catalog():
     maya, leo = roles.person("maya"), roles.person("leo")
-    assert roles.person_models(maya) == ["gemini-flash"]
-    assert roles.person_models(leo) == ["gemini-flash", "gemini-pro"]
-    assert not roles.model_enabled("claude-opus")            # listed, not switched on yet
+    assert roles.person_models(maya) == ["gemini-flash", "kimi-k2"]
+    assert roles.person_models(leo) == ["gemini-flash", "gemini-pro", "kimi-k2", "qwen-coder"]
+    assert not roles.model_enabled("deepseek")               # listed, not switched on yet
+    assert not roles.model_enabled("claude-opus")            # not in the catalog at all
     assert agents.pick_model(maya, "gemini-pro") == "gemini-flash"   # not on her list
     assert agents.pick_model(leo, "gemini-pro") == "gemini-pro"
-    assert agents.pick_model(leo, "claude-opus") == "gemini-flash"   # not enabled
+    assert agents.pick_model(leo, "deepseek") == "gemini-flash"      # not enabled
+
+
+def _form() -> tuple[dict, dict]:
+    """The policy form as the browser sends it: every level and every model's status."""
+    b = roles.base()
+    levels = {k: {f: v[f] for f in roles.EDITABLE} for k, v in b["levels"].items()}
+    models = {k: v["status"] for k, v in b["models"].items() if v["status"] != "setup"}
+    return levels, models
+
+
+def test_policy_form_rules():
+    levels, models = _form()
+    assert roles.validate_policy(levels, models) == []
+    assert roles.minimal(levels, models) == {}                        # nothing differs from role.yaml
+    ask = {**levels["ask"], "models": ["gemini-flash", "deepseek"]}
+    assert roles.validate_policy({**levels, "ask": ask}, models)      # DeepSeek is switched off
+    assert roles.validate_policy({**levels, "ask": ask}, {**models, "deepseek": "enabled"}) == []
+    assert roles.validate_policy({**levels, "ask": {**ask, "models": ["claude-sonnet"]}}, models)  # not in the catalog
+    assert roles.validate_policy({**levels, "ask": {**ask, "models": []}}, models)          # no model at all
+    assert roles.validate_policy({**levels, "ask": {**levels["ask"], "budget_usd": 50}}, models)
+    assert roles.validate_policy({**levels, "ask": {**levels["ask"], "rpm_limit": True}}, models)
+    assert roles.validate_policy(levels, {**models, "openai-codex": "enabled"})            # not in the catalog
+    assert roles.validate_policy({"ask": levels["ask"]}, models)                           # every level
+
+
+def test_policy_changes_sit_on_top_of_role_yaml():
+    levels, models = _form()
+    v0 = roles.version()
+    levels["ask"] = {**levels["ask"], "models": ["gemini-flash", "deepseek"], "budget_usd": 3.0}
+    o = roles.minimal(levels, {**models, "deepseek": "enabled"})
+    assert o == {"levels": {"ask": {"models": ["gemini-flash", "deepseek"], "budget_usd": 3.0}},
+                 "models": {"deepseek": "enabled"}}
+    changes = roles.describe_changes(roles.config(), roles.merged(o))
+    assert "DeepSeek V3.2 switched on" in changes and "Ask: added DeepSeek V3.2" in changes
+    assert "Ask: removed Kimi K2 Thinking" in changes and "Ask: budget $2.00 → $3.00" in changes
+    roles.set_overrides(o)
+    try:
+        assert roles.person_models(roles.person("maya")) == ["gemini-flash", "deepseek"]
+        assert roles.model_enabled("deepseek") and roles.version() != v0
+        assert roles.base()["levels"]["ask"]["budget_usd"] == 2.0       # the file itself is untouched
+    finally:
+        roles.set_overrides({})
+    assert roles.version() == v0 and roles.person_models(roles.person("maya")) == ["gemini-flash", "kimi-k2"]
+
+
+def test_projects_keep_their_own_files_and_rules():
+    leo = roles.person("leo")
+    assert agents.can_edit(leo, "firstround") and not agents.can_edit(leo, "rolespace")
+    names = [t.__name__ for t in agents._tools(leo, agents.Conversation(), [], "rolespace")]
+    assert "propose_edit" not in names and "read_file" in names        # no PRs outside firstround-demo
+    assert not roles.explain(leo, "tool", "propose_edit", "rolespace")["allowed"]
+    assert roles.explain(leo, "edit", "public/css/app.css", "firstround")["allowed"]
+    convo = agents.Conversation(reads={"roles.py": set(range(1, 30))})
+    ok, = agents.check_citations("See [roles.py:5-9].", convo, "rolespace")
+    assert ok["ok"] and "/praveensaharan/RoleSpace/blob/" in ok["url"]
+    missing, = agents.check_citations("See [roles.py:5-9].", convo, "firstround")   # not in that repo
+    assert not missing["ok"]
+
+
+def test_repo_access_changes_win_over_role_yaml():
+    maya = roles.person("maya")
+    assert roles.person_projects(maya) == ["firstround", "rolespace", "screener"]   # none listed: all
+    known = {p["id"] for p in roles.people()}
+    assert roles.validate_access({"maya": ["rolespace"]}, known) == []
+    assert roles.validate_access({"maya": []}, known)                  # everyone works on something
+    assert roles.validate_access({"maya": ["nope"]}, known) and roles.validate_access({"zed": ["rolespace"]}, known)
+    v0 = roles.version()
+    roles.set_access({"maya": ["rolespace"]})
+    try:
+        assert roles.person_projects(maya) == ["rolespace"] and roles.version() != v0
+        assert roles.default_projects(maya) == ["firstround", "rolespace", "screener"]
+        assert roles.person_projects(roles.person("leo")) == ["firstround", "rolespace", "screener"]
+    finally:
+        roles.set_access({})
+    assert roles.version() == v0
+
+
+def test_new_main_is_unpacked_safely():
+    """A GitHub tarball is untrusted input: only regular text files, all inside the folder."""
+    import io
+    import tarfile
+    import tempfile
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        def add(name, data=b"x = 1\n", kind=tarfile.REGTYPE, link=""):
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname, info.size = kind, link, len(data) if kind == tarfile.REGTYPE else 0
+            tar.addfile(info, io.BytesIO(data) if kind == tarfile.REGTYPE else None)
+        add("owner-repo-abc/lib/score.mjs")
+        add("owner-repo-abc/README.md")
+        add("owner-repo-abc/../../escape.py")                       # climbs out
+        add("owner-repo-abc/docs/shot.png", b"\x89PNG")              # not text
+        add("owner-repo-abc/link.py", kind=tarfile.SYMTYPE, link="/etc/passwd")
+        add("owner-repo-abc/.git/config")
+        add("owner-repo-abc/big.json", b"x" * agents.MAX_FILE)
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d) / "snap"
+        root.mkdir()
+        assert agents.extract_snapshot(buf.getvalue(), root) == 2
+        assert sorted(f.relative_to(root).as_posix() for f in root.rglob("*") if f.is_file()) == ["README.md", "lib/score.mjs"]
+        assert not (pathlib.Path(d) / "escape.py").exists()
+
+
+def test_reopened_chat_keeps_live_previews_and_context():
+    key = "test-session:leo"
+    agents.reset(key)
+    agents._conversation(key).edits["e1"] = {"id": "e1"}
+    live = agents.resume(key, [{"q": "Make the title blue", "r": {"answer": "Done, see the preview."}}])
+    assert live == {"e1"}
+    convo = agents.CONVERSATIONS[key]
+    assert convo.session_id is None and "Make the title blue" in convo.prior and "e1" in convo.edits
+    agents.reset(key)
 
 
 def test_onboarding_checks_the_request():

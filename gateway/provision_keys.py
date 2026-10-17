@@ -3,6 +3,8 @@
 The raw key is shown once by LiteLLM, so we keep it in Secret Manager as `gw-key-<id>`.
 Re-running is safe: existing keys are updated in place (models, budget), not replaced.
 This is also how the admin changes a budget: edit role.yaml, run this again.
+It writes role.yaml's values only. If an admin changed levels in the app (Govern > Policy),
+press "Push to keys" there afterwards so the keys carry the app's changes again.
 
     python3 gateway/provision_keys.py            # uses GATEWAY_URL, or looks it up on Cloud Run
 """

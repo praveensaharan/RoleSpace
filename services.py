@@ -202,7 +202,8 @@ def _event_hash(prev: str, rec: dict) -> str:
 def audit(kind: str, person: str, level: str, detail: str, **extra) -> None:
     """kind: refused_change | edit_denied | tool_denied | injection_ignored | edit_previewed |
     pr_opened | budget_changed | access_suspended | access_restored | access_requested |
-    elevation_granted | elevation_denied | elevation_ended | request_updated"""
+    elevation_granted | elevation_denied | elevation_ended | request_updated | policy_changed |
+    policy_reset | policy_synced | repo_access_changed"""
     with _audit_lock:
         if _chain["head"] is None:
             latest = next((e for e in _docs("audit", 50) if e.get("hash")), None)
@@ -324,6 +325,87 @@ def answers(limit: int = 500) -> list[dict]:
     return [{**a, "ts": _iso(a.get("ts"))} for a in _docs("answers", limit)]
 
 
+# --- Policy changes made in Govern > Policy (on top of role.yaml) -----------------------
+
+def get_policy() -> dict:
+    doc = _col("settings").document("policy").get()
+    return doc.to_dict() if doc.exists else {}
+
+
+def save_policy(o: dict, by: str) -> None:
+    _col("settings").document("policy").set({"levels": o.get("levels", {}), "models": o.get("models", {}),
+                                             "by": by, "ts": now()})
+
+
+# --- Repo access changed in Govern > Repo access ------------------------------------------
+
+def get_access() -> dict:
+    doc = _col("settings").document("access").get()
+    return doc.to_dict() if doc.exists else {}
+
+
+def save_access(people: dict, by: str) -> None:
+    _col("settings").document("access").set({"people": people, "by": by, "ts": now()})
+
+
+# --- Saved chats ------------------------------------------------------------------------
+# One document per chat, owned by a browser (its random session id) and a person, so two
+# visitors on the same persona never see each other's chats. Firestore's TTL policy on
+# `expires` deletes a chat 30 days after it was last used.
+
+CHAT_DAYS = 30
+MAX_TURNS = 40
+
+
+def _owned(doc, session: str, person: str) -> dict | None:
+    c = doc.to_dict() if doc.exists else None
+    return c if c and c.get("session") == session and c.get("person") == person else None
+
+
+def get_chat(cid: str, session: str, person: str) -> dict | None:
+    c = _owned(_col("chats").document(cid).get(), session, person)
+    if c:
+        c["turns"] = [{**t, "r": json.loads(t["r"])} for t in c.get("turns", [])]
+    return c
+
+
+def save_turn(cid: str, session: str, person: str, question: str, result: dict) -> bool:
+    """Append a question and its answer. The answer is stored as JSON text: it holds nested
+    lists Firestore can't store as fields, and it is only ever read back whole."""
+    ref = _col("chats").document(cid)
+    doc = ref.get()
+    if doc.exists:
+        c = _owned(doc, session, person)
+        if c is None:
+            return False   # someone else's id: never write into another browser's chat
+    else:
+        c = {"session": session, "person": person, "title": " ".join(question.split())[:80], "created": now()}
+    turns = c.get("turns", []) + [{"q": question, "r": json.dumps(result, default=str), "at": now().isoformat()}]
+    turns = turns[-MAX_TURNS:]
+    while len(turns) > 1 and sum(len(t["q"]) + len(t["r"]) for t in turns) > 700_000:  # 1 MB per document
+        turns.pop(0)
+    ref.set({**c, "turns": turns, "n": len(turns), "updated": now(), "project": result.get("project"),
+             "expires": now() + datetime.timedelta(days=CHAT_DAYS)})
+    return True
+
+
+def list_chats(session: str, person: str, limit: int = 30) -> list[dict]:
+    q = (_col("chats").where(filter=FieldFilter("session", "==", session))
+         .where(filter=FieldFilter("person", "==", person)).select(["title", "updated", "n", "project"]))
+    rows = sorted(({**d.to_dict(), "id": d.id} for d in q.stream()),
+                  key=lambda c: c.get("updated") or now(), reverse=True)[:limit]
+    return [{"id": c["id"], "title": c.get("title") or "", "updated": _iso(c.get("updated")), "turns": c.get("n") or 0,
+             "project": c.get("project")} for c in rows]
+
+
+def delete_chat(cid: str, session: str, person: str) -> bool:
+    ref = _col("chats").document(cid)
+    if _owned(ref.get(), session, person) is None:
+        return False
+    ref.delete()
+    return True
+
+
 # --- GitHub pull requests (fine-grained token for firstround-demo only) -----------------
 
 def _gh(method: str, path: str, **kw) -> dict:
@@ -337,6 +419,36 @@ def _gh(method: str, path: str, **kw) -> dict:
     if r.status_code >= 400:
         raise UpstreamError(f"GitHub {method} {path.split('?')[0]}: {r.status_code} {r.text[:160]}")
     return r.json()
+
+
+def _gh_read(repo: str, path: str, accept: str, timeout: float) -> httpx.Response:
+    """Read from any repository RoleSpace serves (all public). The token raises the rate limit;
+    without it the call still works, just with GitHub's anonymous limit."""
+    headers = {"Accept": accept, "X-GitHub-Api-Version": "2022-11-28"}
+    try:
+        headers["Authorization"] = f"Bearer {secret('github-token')}"
+    except Exception:
+        pass
+    url = f"https://api.github.com/repos/{repo}{path}"
+    try:
+        r = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=True)
+        if r.status_code == 401 and "Authorization" in headers:   # an expired token: public repos still read
+            headers.pop("Authorization")
+            r = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=True)
+    except httpx.HTTPError as e:
+        raise UpstreamError(f"GitHub didn't answer ({type(e).__name__})") from e
+    if r.status_code >= 400:
+        raise UpstreamError(f"GitHub {path.split('?')[0]} for {repo}: {r.status_code} {r.text[:120]}")
+    return r
+
+
+def github_head(repo: str) -> str:
+    """The commit the repository's default branch (main) points to right now."""
+    return _gh_read(repo, "/commits/HEAD", "application/vnd.github.sha", 5).text.strip()
+
+
+def github_tarball(repo: str, sha: str) -> bytes:
+    return _gh_read(repo, f"/tarball/{sha}", "application/vnd.github+json", 60).content
 
 
 def open_pr(branch: str, path: str, old_text: str, new_text: str, title: str, body: str,

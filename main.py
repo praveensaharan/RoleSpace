@@ -46,6 +46,7 @@ CHAT_LIMIT_PER_IP = 40     # per hour; the URL is public, budgets cap cost and t
 CHAT_LIMIT_TOTAL = 300
 PASSCODE_SECRET = "demo-admin-passcode"
 PASSCODE_NEEDED = "demo passcode required"
+CHAT_ID = r"^[A-Za-z0-9-]{8,64}$"   # saved chats: an id the browser makes up
 _pr_times: dict[str, list[float]] = collections.defaultdict(list)
 _chat_times: dict[str, collections.deque] = collections.defaultdict(collections.deque)
 _pr_inflight: set[str] = set()
@@ -93,8 +94,14 @@ _members_at = {"t": 0.0}
 
 
 def _load_members(force: bool = False) -> None:
-    """People added through onboarding (Firestore), merged into role.yaml's list every 20 s."""
+    """People added through onboarding and policy changes made in Govern > Policy (Firestore),
+    merged into role.yaml every 20 s."""
     if force or time.time() - _members_at["t"] > 20:
+        try:
+            roles.set_overrides(services.get_policy())
+            roles.set_access(services.get_access().get("people"))
+        except Exception:
+            LOG.exception("could not load policy changes; keeping the last ones loaded")
         try:
             roles.set_members(services.list_members())
         except Exception:
@@ -130,10 +137,15 @@ def _key_info(pid: str) -> dict:
     return services.key_info(f"{p['id']}-{p['base_level']}")  # aliases use the person's own level
 
 
+def _session(request: Request) -> str:
+    """The browser's random id (it keeps it in localStorage), or "anon"."""
+    sid = request.headers.get("x-rs-session", "")
+    return sid if re.fullmatch(r"[A-Za-z0-9-]{8,64}", sid) else "anon"
+
+
 def _convo(request: Request, pid: str) -> str:
     """Conversations are per browser and person: the browser sends a random id it keeps."""
-    sid = request.headers.get("x-rs-session", "")
-    return f"{sid if re.fullmatch(r'[A-Za-z0-9-]{8,64}', sid) else 'anon'}:{pid}"
+    return f"{_session(request)}:{pid}"
 
 
 def _client_ip(request: Request) -> str:
@@ -166,14 +178,15 @@ def index() -> HTMLResponse:
 
 @app.get("/health")  # Cloud Run reserves /healthz
 def health() -> dict:
-    return {"ok": True, "repo_commit": agents.REPO_SHA, "files": len(agents.repo_files()),
+    return {"ok": True, "repo_commit": agents.repo_sha(), "files": len(agents.repo_files()),
+            "projects": {k: agents.repo_sha(k) for k in roles.projects()},
             "policy_version": roles.version()}
 
 
 @app.get("/api/status")
 def status() -> dict:
     """Service health for the status light in the top bar (cached for 20 s)."""
-    return {**services.health(), "commit": agents.REPO_SHA, "policy_version": roles.version()}
+    return {**services.health(), "commit": agents.repo_sha(), "policy_version": roles.version()}
 
 
 def _viewer(request: Request) -> str | None:
@@ -199,11 +212,13 @@ def people(request: Request) -> dict:
                   "allow_paths": v.get("allow_paths", []), "deny_paths": v.get("deny_paths", []),
                   "rpm_limit": v.get("rpm_limit"), "tpm_limit": v.get("tpm_limit")}
               for k, v in cfg["levels"].items()}
-    return {"company": cfg["company"], "repo": cfg["repo"], "commit": agents.REPO_SHA,
+    return {"company": cfg["company"], "repo": cfg["repo"], "commit": agents.repo_sha(),
             "budget_period": cfg["budget_period"], "people": out, "levels": levels,
             "teams": cfg.get("teams", {}), "elevation": cfg.get("elevation", {}),
             "policy_version": roles.version(), "files": list(agents.repo_files()), "viewer": _viewer(request),
-            "catalog": roles.catalog(), "projects": roles.projects(), "company_domain": cfg.get("company_domain")}
+            "catalog": roles.catalog(), "company_domain": cfg.get("company_domain"),
+            "projects": {k: {**v, "commit": agents.repo_sha(k), "files": len(agents.repo_files(k)),
+                             "pull_requests": roles.project_prs(k)} for k, v in roles.projects().items()}}
 
 
 @app.get("/api/me")
@@ -223,6 +238,7 @@ class ChatIn(BaseModel):
     message: str = Field(max_length=8000)
     model: str | None = Field(default=None, max_length=60)      # must be on the person's list
     project: str | None = Field(default=None, max_length=60)
+    chat: str | None = Field(default=None, pattern=CHAT_ID)       # saved chat to add this turn to
 
 
 def _rate_limit(ip: str) -> None:
@@ -246,10 +262,16 @@ async def chat(body: ChatIn, request: Request) -> dict:
     except KeyError:
         raise HTTPException(404, f"unknown person {body.person}")
     _rate_limit(_client_ip(request))
-    key = _convo(request, body.person)
+    key, sid, question = _convo(request, body.person), _session(request), body.message.strip()[:4000]
     async with _chat_locks[key]:  # one turn at a time per conversation: one ADK session each
         p = await run_in_threadpool(_person, body.person)
-        result = await agents.chat(p, body.message.strip()[:4000], key, body.model, body.project)
+        result = await agents.chat(p, question, key, body.model, body.project)
+        if body.chat and sid != "anon":
+            try:
+                result["saved"] = await run_in_threadpool(services.save_turn, body.chat, sid, p["id"], question, result)
+            except Exception:
+                LOG.exception("could not save the chat turn")  # the answer still goes back
+                result["saved"] = False
     try:
         await run_in_threadpool(services.log_answer, {
             "person": p["id"], "level": p["level"], "model": result["model"], "seconds": result["seconds"],
@@ -274,6 +296,45 @@ def reset(body: PersonIn, request: Request) -> dict:
     return {"ok": True}
 
 
+# --- Saved chats: per browser and person, kept 30 days after last use ---------------------
+
+def _chat_id(cid: str) -> str:
+    if not re.fullmatch(CHAT_ID, cid):
+        raise HTTPException(400, "bad chat id")
+    return cid
+
+
+@app.get("/api/chats")
+def chats(person: str, request: Request) -> dict:
+    """This browser's saved chats for the person, newest first."""
+    sid = _session(request)
+    return {"chats": [] if sid == "anon" else services.list_chats(sid, _person(person)["id"]),
+            "keep_days": services.CHAT_DAYS}
+
+
+@app.post("/api/chats/{cid}/open")
+def open_chat(cid: str, body: PersonIn, request: Request) -> dict:
+    """Load a saved chat and carry on with it: the model gets its last few turns as context.
+    Edit previews this server no longer holds come back marked expired."""
+    p, sid = _person(body.person), _session(request)
+    c = services.get_chat(_chat_id(cid), sid, p["id"]) if sid != "anon" else None
+    if not c:
+        raise HTTPException(404, "This chat isn't saved in this browser")
+    live = agents.resume(_convo(request, p["id"]), c["turns"])
+    for t in c["turns"]:
+        for e in t["r"].get("edits") or []:
+            e["expired"] = e["id"] not in live
+    return {"id": cid, "title": c.get("title", ""), "turns": c["turns"]}
+
+
+@app.post("/api/chats/{cid}/delete")
+def delete_chat(cid: str, body: PersonIn, request: Request) -> dict:
+    p, sid = _person(body.person), _session(request)
+    if sid == "anon" or not services.delete_chat(_chat_id(cid), sid, p["id"]):
+        raise HTTPException(404, "This chat isn't saved in this browser")
+    return {"ok": True}
+
+
 class PrIn(BaseModel):
     person: str
     edit_id: str
@@ -286,7 +347,12 @@ def open_pr(body: PrIn, request: Request) -> dict:
     edit = agents.get_edit(key, body.edit_id)
     if not edit:
         raise HTTPException(404, "This preview has expired; ask for the edit again")
-    # Checked again here, not only in the agent's tool: this is the call that writes.
+    # Checked again here, not only in the agent's tool: this is the call that writes. Pull requests
+    # go to the one repository the GitHub token and the allow-list CI check cover.
+    project = edit.get("project", agents.DEFAULT_PROJECT)
+    if not roles.project_prs(project) or agents.repo_name(project) != services.GITHUB_REPO:
+        services.audit("edit_denied", p["id"], p["level"], f"PR for {edit['path']} in {project} denied at open")
+        raise HTTPException(403, f"RoleSpace doesn't open pull requests in {project}")
     if "propose_edit" not in p["level_cfg"]["tools"] or not roles.path_allowed(p["level_cfg"], edit["path"]):
         services.audit("edit_denied", p["id"], p["level"], f"PR for {edit['path']} denied at open")
         raise HTTPException(403, f"{edit['path']} is outside the allow-list")
@@ -452,6 +518,7 @@ class ExplainIn(BaseModel):
     target: str
     action: Literal["edit", "model", "tool", "workspace", "admin"]
     value: str = Field(default="", max_length=300)
+    project: str | None = Field(default=None, max_length=60)
 
 
 @app.post("/api/policy/explain")
@@ -461,7 +528,7 @@ def policy_explain(body: ExplainIn) -> dict:
     if body.target != body.person:
         _require_govern(body.person)
     t = _person(body.target)
-    result = roles.explain(t, body.action, body.value)
+    result = roles.explain(t, body.action, body.value, body.project if body.project in roles.projects() else None)
     if body.action in ("edit", "model", "tool", "workspace"):  # every one of these spends through the key
         info = _key_info(t["id"])
         spent, budget = float(info.get("spend") or 0), info.get("max_budget")
@@ -476,9 +543,14 @@ def policy_explain(body: ExplainIn) -> dict:
 
 @app.get("/api/policy")
 def policy(person: str) -> dict:
-    """role.yaml as deployed, its fingerprint, and the temporary levels running now."""
+    """role.yaml as deployed, the admin's changes on top of it, the fingerprint of both, and the
+    temporary levels running now."""
     _require_govern(person)
-    return {"source": roles.source(), "version": roles.version(), "grants": access.all_active()}
+    saved = services.get_policy()
+    return {"source": roles.source(), "version": roles.version(), "grants": access.all_active(),
+            "overrides": roles.overrides(), "changed_by": saved.get("by") if roles.overrides() else None,
+            "changed_at": services._iso(saved.get("ts")) if roles.overrides() else None,
+            "limits": roles.LIMITS}
 
 
 # --- Govern -------------------------------------------------------------------------------
@@ -652,6 +724,166 @@ def suspend(body: SuspendIn) -> dict:
     return {"ok": True, "suspended": body.suspended}
 
 
+# --- Govern: repo access (who may ask about and work on which repository) -----------------
+
+def _access_view() -> dict:
+    saved = services.get_access()
+    projects = {k: {"name": v.get("name", k), "repo": v["repo"], "team": v.get("team"),
+                    "owner": roles.team_owner(v.get("team") or ""), "pull_requests": roles.project_prs(k),
+                    "commit": agents.repo_sha(k), "files": len(agents.repo_files(k)),
+                    "checked": agents.checked_at(k)}
+                for k, v in roles.projects().items()}
+    people = [{"id": p["id"], "name": p["name"], "title": p.get("title", ""), "team": p["team"],
+               "email": p.get("email", ""), "level": p["level"], "onboarded": bool(p.get("created_by")),
+               "projects": roles.person_projects(p), "default": roles.default_projects(p),
+               "changed": p["id"] in roles.access()} for p in roles.people()]
+    return {"projects": projects, "people": people, "changed_by": saved.get("by"),
+            "changed_at": services._iso(saved.get("ts")) if saved else None}
+
+
+@app.get("/api/govern/access")
+def repo_access(person: str) -> dict:
+    _require_govern(person)
+    _load_members(force=True)
+    return _access_view()
+
+
+@app.post("/api/govern/repos/{project}/sync")
+def sync_repo(project: str, body: PersonIn) -> dict:
+    """Fetch the newest main of one repository now. Answers do this on their own, at most once a
+    minute per repository; this is for an admin who just merged something."""
+    _require_govern(body.person)
+    if project not in roles.projects():
+        raise HTTPException(404, f"unknown repository {project}")
+    result = agents.sync_project(project, force=True)
+    _invalidate()
+    return {"sync": result, **_access_view()}
+
+
+class AccessChangeIn(BaseModel):
+    person: str
+    people: dict[str, list[str]] = Field(max_length=200)   # person id -> projects, for the people changed
+
+
+@app.post("/api/govern/access", dependencies=[Depends(require_passcode)])
+def save_repo_access(body: AccessChangeIn) -> dict:
+    """Give or take away repositories. The assistant follows at once; Build workspaces clone the
+    new list at their next start once coder/sync_build_keys.sh has run."""
+    admin = _require_govern(body.person)
+    _load_members(force=True)
+    everyone = {p["id"]: p for p in roles.people()}
+    errors = roles.validate_access(body.people, set(everyone))
+    if errors:
+        raise HTTPException(400, " ".join(errors[:5]))
+    name = lambda k: roles.projects()[k].get("name", k)  # noqa: E731
+    stored, changes = roles.access(), []
+    for pid, picked in body.people.items():
+        p, before = everyone[pid], roles.person_projects(everyone[pid])
+        added, removed = [x for x in picked if x not in before], [x for x in before if x not in picked]
+        if added or removed:
+            changes.append(f"{p['name']}: " + "; ".join(
+                ([f"+ {', '.join(map(name, added))}"] if added else []) + ([f"− {', '.join(map(name, removed))}"] if removed else [])))
+        if sorted(picked) == sorted(roles.default_projects(p)):
+            stored.pop(pid, None)   # back to what role.yaml or onboarding says: nothing to keep
+        else:
+            stored[pid] = [x for x in roles.projects() if x in picked]   # in role.yaml's order
+    if not changes:
+        return {"changes": [], **_access_view()}
+    services.save_access(stored, admin["id"])
+    roles.set_access(stored)
+    services.audit("repo_access_changed", admin["id"], "govern", "Repo access: " + " | ".join(changes),
+                   changes=changes, version=roles.version())
+    _invalidate()
+    return {"changes": changes, **_access_view()}
+
+
+# --- Govern: the policy form (each level's models, budget and limits, without YAML) -------
+
+class LevelPolicyIn(BaseModel):
+    models: list[str] = Field(max_length=20)
+    budget_usd: float = Field(allow_inf_nan=False)
+    rpm_limit: int
+    tpm_limit: int
+
+
+class PolicyIn(BaseModel):
+    person: str
+    levels: dict[str, LevelPolicyIn] = Field(max_length=10)
+    models: dict[str, Literal["enabled", "available"]] = Field(max_length=40)
+
+
+def _sync_keys(budget_levels: set[str]) -> tuple[list[str], list[str]]:
+    """Push the policy in force to every person's gateway key: models and rate limits always,
+    and the level's budget for people whose level's budget just changed."""
+    updated, failed = [], []
+    for base in roles.people():
+        pid, lvl = base["id"], base["level_cfg"]
+        try:
+            g = access.active(pid)
+            fields = {"models": access.key_models(pid, g["level"] if g else None)}
+            fields.update({k: lvl[k] for k in ("rpm_limit", "tpm_limit") if lvl.get(k)})
+            if base["level"] in budget_levels:
+                fields["max_budget"] = lvl["budget_usd"]
+            services.key_update(pid, **fields)
+            updated.append(base["name"])
+        except Exception:
+            LOG.exception("could not update the gateway key for %s", pid)
+            failed.append(base["name"])
+    return updated, failed
+
+
+def _apply_policy(admin: dict, stored: dict, kind: str) -> dict:
+    """Save the admin's changes, put them in force, and push them to every key."""
+    before, after = roles.config(), roles.merged(stored)
+    changes = roles.describe_changes(before, after)
+    if not changes and stored == roles.overrides():   # nothing new: just retry pushing it to the keys
+        updated, failed = _sync_keys(set())
+        return {"changes": [], "updated": updated, "failed": failed, "version": roles.version()}
+    services.save_policy(stored, admin["id"])   # recorded first: keys never run ahead of the record
+    roles.set_overrides(stored)
+    budgets = {k for k, v in after["levels"].items() if v["budget_usd"] != before["levels"][k]["budget_usd"]}
+    updated, failed = _sync_keys(budgets)
+    summary = "; ".join(changes) or "no change in effect"
+    services.audit(kind, admin["id"], "govern",
+                   ("Policy back to role.yaml: " if kind == "policy_reset" else "Policy changed: ") + summary,
+                   changes=changes, version=roles.version(), keys_failed=failed)
+    _invalidate()
+    return {"changes": changes, "updated": updated, "failed": failed, "version": roles.version()}
+
+
+@app.post("/api/govern/policy", dependencies=[Depends(require_passcode)])
+def save_policy(body: PolicyIn) -> dict:
+    admin = _require_govern(body.person)
+    _load_members(force=True)
+    levels = {k: v.model_dump() for k, v in body.levels.items()}
+    errors = roles.validate_policy(levels, body.models)
+    if errors:
+        raise HTTPException(400, " ".join(errors[:5]))
+    return _apply_policy(admin, roles.minimal(levels, body.models), "policy_changed")
+
+
+@app.post("/api/govern/policy/sync", dependencies=[Depends(require_passcode)])
+def sync_policy(body: PersonIn) -> dict:
+    """Push the policy in force to every key again (models and limits; budgets stay as they are):
+    after a failed save, or after provision_keys.py wrote role.yaml's values over the app's."""
+    admin = _require_govern(body.person)
+    _load_members(force=True)
+    updated, failed = _sync_keys(set())
+    services.audit("policy_synced", admin["id"], "govern",
+                   f"Policy {roles.version()} pushed to {len(updated)} gateway keys" + (f"; failed: {', '.join(failed)}" if failed else ""),
+                   version=roles.version(), keys_failed=failed)
+    _invalidate()
+    return {"updated": updated, "failed": failed, "version": roles.version()}
+
+
+@app.post("/api/govern/policy/reset", dependencies=[Depends(require_passcode)])
+def reset_policy(body: PersonIn) -> dict:
+    """Drop every change made in the app: role.yaml alone decides again."""
+    admin = _require_govern(body.person)
+    _load_members(force=True)
+    return _apply_policy(admin, {}, "policy_reset")
+
+
 @app.get("/api/govern/audit")
 def audit_log(person: str) -> dict:
     _require_govern(person)
@@ -687,7 +919,7 @@ def evidence(person: str, format: Literal["json", "csv"] = "json") -> Response:
     else:
         data = json.dumps({
             "product": "RoleSpace", "generated_at": services.now().isoformat(), "generated_by": admin["name"],
-            "company": roles.config()["company"], "repository": roles.config()["repo"], "commit": agents.REPO_SHA,
+            "company": roles.config()["company"], "repository": roles.config()["repo"], "commit": agents.repo_sha(),
             "policy": {"version": roles.version(), "role_yaml": roles.source()},
             "audit_chain": chain, "controls": CONTROLS, "events": events,
             "how_to_verify": "For each event with a hash: sha256(prev_hash + canonical JSON of the event "

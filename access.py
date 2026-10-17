@@ -50,6 +50,13 @@ def _public(g: dict) -> dict:
     return {k: g[k] for k in ("id", "level", "from_level", "expires_at", "approved_by", "reason", "request_id") if k in g}
 
 
+def key_models(pid: str, level: str | None = None) -> list[str]:
+    """The models the person's gateway key should carry: their own (switched-on models only),
+    plus a temporary level's while it runs."""
+    own = roles.person_models(roles.person(pid))
+    return sorted(set(own) | set(roles.person_models(roles.person(pid, level)))) if level else own
+
+
 def grant(pid: str, level: str, hours: float, approved_by: str, reason: str, request_id: str) -> dict:
     base = roles.person(pid)
     if level not in roles.elevation_targets(base["level"]):
@@ -57,12 +64,11 @@ def grant(pid: str, level: str, hours: float, approved_by: str, reason: str, req
     hours = max(0.25, min(roles.elevation_max_hours(), float(hours)))
     if active(pid):
         raise ValueError(f"{base['name']} already has a temporary level")
-    models = roles.config()["levels"][level]["models"]
     g = {"person": pid, "level": level, "from_level": base["level"], "expires_at": time.time() + hours * 3600,
          "approved_by": approved_by, "reason": reason[:300], "request_id": request_id, "status": "starting"}
     g["id"] = services.save_grant(g)  # recorded first, so a key change never exists without a record
     try:
-        services.key_update(pid, models=sorted(set(models) | set(base["level_cfg"]["models"])))
+        services.key_update(pid, models=key_models(pid, level))
     except services.UpstreamError:
         services.set_grant_status(g["id"], "failed")
         raise
@@ -84,7 +90,7 @@ def end(pid: str, by: str, how: str = "revoked") -> bool:
         return False
     base = roles.person(pid)
     try:
-        services.key_update(pid, models=base["level_cfg"]["models"])
+        services.key_update(pid, models=key_models(pid))
     except services.UpstreamError:
         with _lock:  # keep the grant so the next check retries the key change
             _grants[pid] = g
