@@ -28,9 +28,24 @@ def version() -> str:
     return hashlib.sha256(source().encode()).hexdigest()[:12]
 
 
+# People added through onboarding live in Firestore; the app hands them in with set_members().
+# role.yaml stays the source of truth for levels; its own people win on any id clash.
+_members: list[dict] = []
+
+
+def set_members(members: list[dict]) -> None:
+    yaml_ids = {p["id"] for p in config()["people"]}
+    _members[:] = [m for m in members if m.get("id") not in yaml_ids and m.get("status", "active") == "active"]
+
+
+def _raw_people() -> list[dict]:
+    return list(config()["people"]) + _members
+
+
 def person(pid: str, level: str | None = None) -> dict:
-    """A person from role.yaml. `level` overrides their own level (a temporary elevation)."""
-    for p in config()["people"]:
+    """A person from role.yaml or onboarding. `level` overrides their own level (a temporary
+    elevation)."""
+    for p in _raw_people():
         if p["id"] == pid:
             lvl = level or p["level"]
             return {**p, "base_level": p["level"], "level": lvl, "level_cfg": config()["levels"][lvl]}
@@ -38,7 +53,76 @@ def person(pid: str, level: str | None = None) -> dict:
 
 
 def people() -> list[dict]:
-    return [person(p["id"]) for p in config()["people"]]
+    return [person(p["id"]) for p in _raw_people()]
+
+
+# --- Models and projects -------------------------------------------------------------------
+
+def catalog() -> dict:
+    """Every model the gateway can serve, with its label, provider and status."""
+    return config().get("models", {})
+
+
+def model_enabled(model: str) -> bool:
+    return (catalog().get(model) or {}).get("status", "enabled") == "enabled"
+
+
+def person_models(p: dict) -> list[str]:
+    """Models this person may pick: their level's enabled models, narrowed to the ones an admin
+    chose for them at onboarding (a temporary elevation uses the full level list)."""
+    models = [m for m in p["level_cfg"]["models"] if model_enabled(m)]
+    chosen = p.get("models")
+    if chosen and p["level"] == p.get("base_level", p["level"]):
+        models = [m for m in models if m in chosen] or models[:1]
+    return models
+
+
+def projects() -> dict:
+    return config().get("projects", {})
+
+
+def person_projects(p: dict) -> list[str]:
+    return [x for x in (p.get("projects") or list(projects())) if x in projects()]
+
+
+def member_id(email: str) -> str:
+    """A short, stable id from the email's local part (a-z, 0-9 and dashes)."""
+    local = email.split("@", 1)[0].lower()
+    return re.sub(r"[^a-z0-9]+", "-", local).strip("-")[:30]
+
+
+def validate_member(m: dict) -> list[str]:
+    """Problems with an onboarding request; an empty list means it can be provisioned."""
+    errs, cfg = [], config()
+    email = (m.get("email") or "").strip().lower()
+    domain = cfg.get("company_domain")
+    if not re.fullmatch(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", email):
+        errs.append("Enter a valid work email address.")
+    elif domain and not email.endswith("@" + domain):
+        errs.append(f"Only {domain} email addresses can be added.")
+    elif not member_id(email):
+        errs.append("The email's name part must contain letters or digits.")
+    elif any(p["id"] == member_id(email) or p.get("email", "").lower() == email for p in _raw_people()):
+        errs.append(f"{email} is already a member.")
+    if not (m.get("name") or "").strip():
+        errs.append("Enter the person's name.")
+    level = m.get("level")
+    if level not in cfg["levels"]:
+        errs.append("Choose a level.")
+        return errs
+    if m.get("team") not in cfg.get("teams", {}):
+        errs.append("Choose a team.")
+    bad = [x for x in m.get("projects") or [] if x not in projects()]
+    if bad or not m.get("projects"):
+        errs.append("Choose at least one project." if not bad else f"Unknown project: {', '.join(bad)}")
+    allowed = [x for x in cfg["levels"][level]["models"] if model_enabled(x)]
+    picked = m.get("models") or []
+    if not picked or any(x not in allowed for x in picked):
+        errs.append(f"Choose models from what the {level} level allows: {', '.join(allowed)}.")
+    budget = m.get("budget_usd")
+    if not isinstance(budget, (int, float)) or not 0 <= budget <= 20:
+        errs.append("Budget must be between $0 and $20.")
+    return errs
 
 
 def team_owner(team: str) -> str | None:

@@ -54,6 +54,23 @@ def person_key(pid: str) -> str:
     return secret(f"gw-key-{pid}")
 
 
+def ensure_secret(name: str) -> None:
+    """Create an empty secret if it doesn't exist. Raises PermissionDenied when this identity
+    may not create secrets; onboarding calls it first, so no key is minted that can't be stored."""
+    from google.api_core import exceptions as gexc
+    try:
+        _sm().create_secret(request={"parent": f"projects/{PROJECT}", "secret_id": name,
+                                     "secret": {"replication": {"automatic": {}}}})
+    except gexc.AlreadyExists:
+        pass
+
+
+def add_secret_version(name: str, value: str) -> None:
+    _sm().add_secret_version(request={"parent": f"projects/{PROJECT}/secrets/{name}",
+                                      "payload": {"data": value.encode()}})
+    _secrets.pop(name, None)
+
+
 # --- Gateway ---------------------------------------------------------------------------
 
 _token = {"value": "", "expires": 0.0}
@@ -262,6 +279,20 @@ def update_request(rid: str, status: str, by: str, note: str = "", **extra) -> N
                                           "note": note[:300]}])})
 
 
+# --- Members added through onboarding ---------------------------------------------------
+
+def list_members() -> list[dict]:
+    return [{**d.to_dict(), "id": d.id} for d in _col("members").stream()]
+
+
+def save_member(m: dict) -> None:
+    _col("members").document(m["id"]).set({**m, "ts": now()})
+
+
+def update_member(mid: str, **fields) -> None:
+    _col("members").document(mid).update({**fields, "updated": now()})
+
+
 # --- Temporary elevations --------------------------------------------------------------
 
 def save_grant(grant: dict) -> str:
@@ -308,16 +339,49 @@ def _gh(method: str, path: str, **kw) -> dict:
     return r.json()
 
 
-def open_pr(branch: str, path: str, old_text: str, new_text: str, title: str, body: str) -> str:
-    """Branch from main, apply one exact text replacement to one file, open a PR. Returns its URL."""
+def open_pr(branch: str, path: str, old_text: str, new_text: str, title: str, body: str,
+            author: tuple[str, str] | None = None) -> str:
+    """Branch from main, apply one exact text replacement to one file, open a PR. Returns its URL.
+
+    The bot opens it, so the person needs no GitHub account. The person reviewed the change and
+    chose to open it, so the commit is theirs: `author` (name, email) is its author and committer."""
     main_sha = _gh("GET", "/git/ref/heads/main")["object"]["sha"]
     current = _gh("GET", f"/contents/{path}", params={"ref": "main"})
     text = base64.b64decode(current["content"]).decode()
     if text.count(old_text) != 1:
         raise UpstreamError(f"{path} changed on GitHub since the preview; ask again for a fresh edit")
     _gh("POST", "/git/refs", json={"ref": f"refs/heads/{branch}", "sha": main_sha})
+    who = {"author": {"name": author[0], "email": author[1]},
+           "committer": {"name": author[0], "email": author[1]}} if author else {}
     _gh("PUT", f"/contents/{path}", json={
-        "message": title, "branch": branch, "sha": current["sha"],
+        "message": title, "branch": branch, "sha": current["sha"], **who,
         "content": base64.b64encode(text.replace(old_text, new_text).encode()).decode()})
     return _gh("POST", "/pulls", json={"title": title, "head": branch, "base": "main",
                                         "body": body})["html_url"]
+
+
+_pr_cache: dict[int, tuple[float, dict]] = {}
+
+
+def pr_status(number: int) -> dict:
+    """Where a pull request stands, for people who have no GitHub account (cached for 30 s)."""
+    hit = _pr_cache.get(number)
+    if hit and time.time() - hit[0] < 30:
+        return hit[1]
+    pr = _gh("GET", f"/pulls/{number}")
+    checks = _gh("GET", f"/commits/{pr['head']['sha']}/check-runs").get("check_runs", [])
+    reviews = _gh("GET", f"/pulls/{number}/reviews")
+    review_states = [r["state"] for r in reviews if r.get("state") in ("APPROVED", "CHANGES_REQUESTED")]
+    conclusions = [c.get("conclusion") or c.get("status") for c in checks]
+    out = {
+        "number": number, "url": pr["html_url"], "title": pr["title"],
+        "state": "merged" if pr.get("merged") else pr["state"],
+        "checks": "failing" if any(c in ("failure", "cancelled", "timed_out") for c in conclusions)
+        else "pending" if any(c in ("queued", "in_progress", None) for c in conclusions)
+        else "passing" if conclusions else "none",
+        "review": review_states[-1].lower().replace("_", " ") if review_states else "waiting for review",
+        "comments": pr.get("comments", 0) + pr.get("review_comments", 0),
+        "updated": pr.get("updated_at"),
+    }
+    _pr_cache[number] = (time.time(), out)
+    return out

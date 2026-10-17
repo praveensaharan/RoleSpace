@@ -4,17 +4,40 @@
 # (and coder/sync_build_keys.sh for Build) after editing.
 
 company: FirstRound
+company_domain: firstround.example   # onboarding accepts work emails on this domain only
 repo: praveensaharan/firstround-demo
+
+# Projects: a repository and the team that owns it. A person works on the projects listed
+# for them (all of them when none are listed).
+projects:
+  firstround:
+    name: FirstRound screening app
+    repo: praveensaharan/firstround-demo
+    team: screening
+
+# Every model the gateway can serve. Levels pick from the enabled ones. "available" models need
+# a one-time step (the note) before an admin switches them on in gateway/config.yaml.
+models:
+  gemini-flash: {label: Gemini 3.8 Flash, provider: Google · Vertex AI, status: enabled}
+  gemini-pro:   {label: Gemini 3.1 Pro, provider: Google · Vertex AI, status: enabled}
+  claude-opus:  {label: Claude Opus 5.5, provider: Anthropic on Vertex AI, status: available,
+                 note: "Enable Claude in Vertex AI Model Garden, then uncomment it in gateway/config.yaml"}
+  openai-codex: {label: OpenAI Codex, provider: OpenAI (customer's own key), status: available,
+                 note: "Store an OpenAI API key in Secret Manager, then uncomment it in gateway/config.yaml"}
 
 levels:
   ask:      # PM: questions about the code, answers with checked citations, no writes
     models: [gemini-flash]
     budget_usd: 2.00
+    rpm_limit: 30           # per person's key: stops runaway loops, not normal use
+    tpm_limit: 1000000       # an answer reads ~13K tokens per model call
     agent_model: gemini-flash
     tools: [list_files, search_code, read_file, draft_request]
   suggest:  # designer: small edits inside the allow-list, as a PR a human merges
     models: [gemini-flash, gemini-pro]
     budget_usd: 1.00
+    rpm_limit: 60
+    tpm_limit: 2000000
     agent_model: gemini-flash
     tools: [list_files, search_code, read_file, draft_request, propose_edit]
     allow_paths: ["public/css/**", "public/**/*.html"]
@@ -22,10 +45,14 @@ levels:
   build:    # developer: Coder workspace with Gemini CLI
     models: [gemini-flash, gemini-pro]
     budget_usd: 10.00
+    rpm_limit: 120
+    tpm_limit: 4000000
     tools: [list_files, search_code, read_file, draft_request]
   govern:   # platform admin: roles, budgets, spend, audit
     models: [gemini-flash]
     budget_usd: 1.00
+    rpm_limit: 30
+    tpm_limit: 1000000
     tools: [list_files, search_code, read_file, draft_request]
 
 budget_period: 30d

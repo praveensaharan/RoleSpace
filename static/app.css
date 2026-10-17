@@ -323,3 +323,12 @@ ol.numbered b { color: var(--ink); font-weight: 600; } ol.numbered span { color:
   .topbar { padding: 0 var(--s-md); } .topbar .chip.repo { display: none; } .suggestions { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; scroll-behavior: auto !important; } }
+
+/* model picker, onboarding form */
+.model-pick { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
+.model-pick select { width: auto; min-width: 150px; }
+.checks { display: flex; flex-direction: column; gap: 6px; font-weight: 400; font-size: 13.5px; color: var(--ink); }
+.checks label { display: flex; align-items: center; gap: 8px; } .checks label.off { color: var(--muted-soft); }
+.plan { background: var(--surface-soft); border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 12px 14px; font-size: 13px; color: var(--body); }
+.plan b { color: var(--ink); } .plan ul { margin: 6px 0 0; padding-left: 18px; } .plan li { margin: 2px 0; }
+.modal.wide { max-width: 640px; } .modal .modal-body { max-height: 70vh; overflow-y: auto; }

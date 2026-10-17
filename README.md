@@ -12,7 +12,7 @@ Built for the **AI Builder Cup 2026** (theme: *Future of Work & Enterprise Produ
 | Demo video (3 min) | *add the link* |
 | Submission deck | [docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx](docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx) · [design deck (PDF)](docs/deck/RoleSpace-deck.pdf) |
 
-![RoleSpace architecture](docs/architecture/hld-1-architecture.png)
+![How RoleSpace works](docs/architecture/flow-1-env-usage.png)
 
 ## The problem
 
@@ -32,6 +32,36 @@ Giving everyone a coding agent is unsafe. Giving no one one wastes their time.
 | **Govern** | Ava, platform admin | Levels, budgets, approvals, a kill switch, spend per person, a hash-chained audit log, and a live architecture view. |
 
 The demo codebase is [praveensaharan/firstround-demo](https://github.com/praveensaharan/firstround-demo). Everyone in `role.yaml` is made up.
+
+## Architecture
+
+How everything is laid out in the Google Cloud project:
+
+![Project architecture](docs/architecture/flow-3-project.png)
+
+Each piece in the project:
+- **RoleSpace app and model gateway:** both run on Cloud Run.
+- **Coder workspaces:** run on a VM in a private subnet with no public IP. Outbound traffic goes only through Cloud NAT, and inbound traffic comes only from Google's IAP range.
+- **Gemini on Vertex AI:** only the gateway's service account may call it.
+- **Managed services:** Cloud SQL holds keys and spend, Firestore holds the audit chain and requests, and Secret Manager holds every key and token.
+
+How work moves, from a laptop to a pull request:
+
+![From a laptop to a pull request](docs/architecture/flow-2-work.png)
+
+How a person's sign-in becomes what their level gets:
+
+![User and access management](docs/architecture/flow-4-users.png)
+
+At enterprise scale (designed, not built), the same design grows: directory groups by SCIM, Coder on GKE, a highly available gateway with Model Armor, a VPC Service Controls perimeter, and a GitHub or GitLab app. [docs/enterprise-design.md](docs/enterprise-design.md) explains each step, and what is built now:
+
+![Target architecture at enterprise scale](docs/architecture/flow-5-enterprise.png)
+
+More design pages are in [docs/architecture](docs/architecture):
+- the as-built architecture
+- onboarding
+- the role matrix
+- the policy-check traces
 
 ## Where the policy is enforced
 
@@ -56,6 +86,13 @@ Every decision can explain itself. The person who was blocked sees each check in
 - **Explain every decision,** plus a policy simulator for admins.
 - **Tamper-evident audit:** each event carries the hash of the one before. A one-click evidence pack (JSON or CSV) is mapped to SOC 2 and ISO 27001.
 - **Govern screens:** overview, spend pace per person, impact numbers, and a live architecture view.
+
+Added in the code after the demo was filmed. These reach the live app with the next deploy:
+- **Usage tracking:** tokens and cost per person, model, project and source (assistant or workspace), daily tokens per model, each person's budget and rate limits, and a CSV export.
+- **Rate limits per level:** requests and tokens per minute on every key, next to the budget.
+- **Model choice:** a model catalog in `role.yaml` (Gemini now; Claude on Vertex AI and OpenAI ready to switch on). Each level lists its models, and a person picks one of theirs in the assistant. Their key enforces the same list.
+- **Onboarding:** an admin adds a person by work email, with their level, projects, models and budget. RoleSpace creates their key, stores it in Secret Manager and logs it. **Remove** blocks the key at once.
+- **Changes:** people without a GitHub account follow their pull requests (checks, review, merged) inside RoleSpace. The commit is in their name, since they reviewed the change before opening it.
 
 Screenshots are in [docs/screenshots](docs/screenshots).
 
@@ -108,9 +145,10 @@ gateway/                                               LiteLLM config and image;
 coder/                                                 Coder VM setup, workspace image, template, relay
 tests/test_core.py                                     allow-list, explain, citations, audit chain
 eval/                                                  evaluation script and results
-docs/architecture/                                     four high-level design pages (HTML and PNG)
+docs/architecture/                                     flow diagrams and four high-level design pages
 docs/deck/                                             submission deck (PPTX) and design deck (PDF)
 docs/setup-gcp.md  docs/security.md                    how to deploy it; the security model
+docs/enterprise-design.md                              usage, models, onboarding and merge requests at scale
 ```
 
 ## Run it
@@ -128,10 +166,13 @@ docs/setup-gcp.md  docs/security.md                    how to deploy it; the sec
 ## Built, designed and next
 
 - **Built:** everything above.
-- **Designed, not built:**
-  - levels from Entra ID or Okta groups through SAML and SCIM (the demo's personas stand in for them);
+- **Designed, not built** (details in [docs/enterprise-design.md](docs/enterprise-design.md)):
+  - levels from Entra ID or Okta groups through SAML and SCIM, with the person taken from IAP's signed header (the demo's personas stand in for them);
   - Model Armor in front of the model;
-  - Cloud KMS keys.
+  - a VPC Service Controls perimeter and Cloud KMS keys;
+  - Coder on GKE with a template per role;
+  - a GitHub or GitLab app in place of the bot token;
+  - usage in BigQuery and project budgets.
 - **Next:**
   - policy changes through pull requests, with a preview of who gains or loses access;
   - Ask from Slack and Teams, with requests flowing into Jira or Linear;

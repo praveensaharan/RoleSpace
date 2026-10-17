@@ -89,8 +89,22 @@ async def unexpected_error(_req: Request, err: Exception) -> JSONResponse:
                                    f"reference {ref}.", "ref": ref}, status_code=500)
 
 
+_members_at = {"t": 0.0}
+
+
+def _load_members(force: bool = False) -> None:
+    """People added through onboarding (Firestore), merged into role.yaml's list every 20 s."""
+    if force or time.time() - _members_at["t"] > 20:
+        try:
+            roles.set_members(services.list_members())
+        except Exception:
+            LOG.exception("could not load members; using role.yaml only")
+        _members_at["t"] = time.time()
+
+
 def _person(pid: str) -> dict:
     """The person as RoleSpace treats them now, including a temporary elevation."""
+    _load_members()
     try:
         return access.effective(pid)
     except KeyError:
@@ -170,22 +184,26 @@ def _viewer(request: Request) -> str | None:
 
 @app.get("/api/people")
 def people(request: Request) -> dict:
+    _load_members()
     cfg = roles.config()
     out = []
     for base in roles.people():
         p = access.effective(base["id"])
         lvl = p["level_cfg"]
         out.append({k: p[k] for k in ("id", "name", "title", "team", "level", "base_level", "grant", "email")} | {
-            "models": lvl["models"], "budget_usd": lvl["budget_usd"], "tools": lvl["tools"],
-            "allow_paths": lvl.get("allow_paths", []), "agent_model": lvl.get("agent_model", "gemini-flash"),
+            "models": roles.person_models(p), "budget_usd": lvl["budget_usd"], "tools": lvl["tools"],
+            "allow_paths": lvl.get("allow_paths", []), "agent_model": agents.pick_model(p, None),
+            "projects": roles.person_projects(p), "onboarded": bool(p.get("created_by")),
             "elevation_targets": roles.elevation_targets(p["base_level"])})
     levels = {k: {"models": v["models"], "budget_usd": v["budget_usd"], "tools": v["tools"],
-                  "allow_paths": v.get("allow_paths", []), "deny_paths": v.get("deny_paths", [])}
+                  "allow_paths": v.get("allow_paths", []), "deny_paths": v.get("deny_paths", []),
+                  "rpm_limit": v.get("rpm_limit"), "tpm_limit": v.get("tpm_limit")}
               for k, v in cfg["levels"].items()}
     return {"company": cfg["company"], "repo": cfg["repo"], "commit": agents.REPO_SHA,
             "budget_period": cfg["budget_period"], "people": out, "levels": levels,
             "teams": cfg.get("teams", {}), "elevation": cfg.get("elevation", {}),
-            "policy_version": roles.version(), "files": list(agents.repo_files()), "viewer": _viewer(request)}
+            "policy_version": roles.version(), "files": list(agents.repo_files()), "viewer": _viewer(request),
+            "catalog": roles.catalog(), "projects": roles.projects(), "company_domain": cfg.get("company_domain")}
 
 
 @app.get("/api/me")
@@ -203,6 +221,8 @@ def me(person: str) -> dict:
 class ChatIn(BaseModel):
     person: str
     message: str = Field(max_length=8000)
+    model: str | None = Field(default=None, max_length=60)      # must be on the person's list
+    project: str | None = Field(default=None, max_length=60)
 
 
 def _rate_limit(ip: str) -> None:
@@ -220,6 +240,7 @@ def _rate_limit(ip: str) -> None:
 async def chat(body: ChatIn, request: Request) -> dict:
     if not body.message.strip():
         raise HTTPException(400, "empty message")
+    _load_members()
     try:
         roles.person(body.person)
     except KeyError:
@@ -228,10 +249,11 @@ async def chat(body: ChatIn, request: Request) -> dict:
     key = _convo(request, body.person)
     async with _chat_locks[key]:  # one turn at a time per conversation: one ADK session each
         p = await run_in_threadpool(_person, body.person)
-        result = await agents.chat(p, body.message.strip()[:4000], key)
+        result = await agents.chat(p, body.message.strip()[:4000], key, body.model, body.project)
     try:
         await run_in_threadpool(services.log_answer, {
             "person": p["id"], "level": p["level"], "model": result["model"], "seconds": result["seconds"],
+            "project": result["project"],
             "citations": len(result["citations"]), "verified": sum(c["ok"] for c in result["citations"]),
             "refused": any(t["tool"] == "draft_request" for t in result["trace"]),
             "denied": any(t.get("flag") == "denied" for t in result["trace"]),
@@ -282,11 +304,14 @@ def open_pr(body: PrIn, request: Request) -> dict:
     try:
         # A fresh branch per attempt: a retry after a half-finished attempt doesn't hit "exists".
         branch = f"rolespace/suggest-{p['id']}-{edit['id']}-{int(time.time()) % 100000}"
-        title = f"[RoleSpace] {edit['reason'][:70]}"
-        body_md = (f"Proposed by **{p['name']}** ({p['title']}, {p['level'].title()} level) through RoleSpace.\n\n"
+        title = edit["reason"][:80]
+        body_md = (f"Change by **{p['name']}** ({p['title']}), who reviewed it before opening this pull "
+                   f"request. They have no GitHub account, so it was opened for them; they follow its "
+                   f"checks, review and comments in RoleSpace.\n\n"
                    f"> {edit['reason']}\n\nOnly `{edit['path']}` changes. The `designer-allowlist` check and one "
                    f"human review are required before merge.\n\nPolicy version `{roles.version()}`.")
-        url = services.open_pr(branch, edit["path"], edit["old_text"], edit["new_text"], title, body_md)
+        url = services.open_pr(branch, edit["path"], edit["old_text"], edit["new_text"], title, body_md,
+                               author=(p["name"], p.get("email") or f"{p['id']}@users.noreply.rolespace"))
     finally:
         _pr_inflight.discard(body.edit_id)
     agents.drop_edit(key, body.edit_id)  # only once the PR exists; a failure keeps the preview
@@ -566,6 +591,7 @@ def _govern_data() -> dict:
         people_rows.append({"id": base["id"], "name": base["name"], "title": base["title"],
                             "level": g["level"] if g else base["level"], "base_level": base["level"],
                             "grant": g, "team": base["team"], "models": k.get("models", []),
+                            "onboarded": bool(base.get("created_by")), "email": base.get("email", ""),
                             "budget": budget, "spent": spent, "blocked_key": bool(k.get("blocked")),
                             "per_day": per_day, "days_left": days_left,
                             **{x: use[x] for x in ("calls", "blocked", "failed", "spend", "tokens")}})
@@ -671,3 +697,203 @@ def evidence(person: str, format: Literal["json", "csv"] = "json") -> Response:
     services.audit("evidence_exported", admin["id"], "govern", f"Evidence pack exported ({ext}, {len(events)} events)")
     return Response(data, media_type=mime, headers={
         "Content-Disposition": f'attachment; filename="rolespace-evidence-{stamp}.{ext}"'})
+
+
+# --- Changes: pull requests opened through RoleSpace, for people without GitHub accounts ----
+
+@app.get("/api/changes")
+def changes(person: str) -> dict:
+    """Each pull request RoleSpace opened for this person (all of them for Govern), with where
+    it stands on GitHub: checks, review, merged or not."""
+    viewer = _person(person)
+    events = [e for e in services.recent_audit(300) if e.get("kind") == "pr_opened" and e.get("url")]
+    if viewer["level"] != "govern":
+        events = [e for e in events if e.get("person") == viewer["id"]]
+    out = []
+    for e in events[:20]:
+        item = {"url": e["url"], "person": e["person"], "name": _name(e["person"]), "opened": e["ts"],
+                "detail": e.get("detail", "")}
+        m = re.search(r"/pull/(\d+)", e["url"])
+        if m:
+            try:
+                item.update(services.pr_status(int(m.group(1))))
+            except services.UpstreamError as err:
+                item["error"] = str(err)
+        out.append(item)
+    return {"changes": out}
+
+
+# --- Usage: tokens and cost by person, model, project and source ---------------------------
+
+def _usage_rows(days: int) -> list[dict]:
+    now = time.time()
+    start = time.strftime("%Y-%m-%d", time.gmtime(now - (days - 1) * 86400))
+    end = time.strftime("%Y-%m-%d", time.gmtime(now + 86400))
+    logs = services.gateway_admin(f"/spend/logs?summarize=false&start_date={start}&end_date={end}")
+    logs = logs if isinstance(logs, list) else logs.get("data", [])
+    by_alias = {f"{p['id']}-{p['base_level']}": p for p in roles.people()}
+    rows = []
+    for log in logs:
+        p = by_alias.get((log.get("metadata") or {}).get("user_api_key_alias"))
+        if not p:
+            continue
+        tags = dict(t.split(":", 1) for t in (log.get("request_tags") or [])
+                    if isinstance(t, str) and ":" in t and not t.startswith("User-Agent"))
+        # The person comes from the key, so it can't be faked. Tags are only a claim (a workspace
+        # could send its own), so a project counts only if it's one of the person's.
+        mine = roles.person_projects(p)
+        project = tags.get("project")
+        if project not in mine:
+            project = mine[0] if len(mine) == 1 else "unattributed"
+        when = _when(log.get("startTime"))
+        rows.append({"time": log.get("startTime"), "day": time.strftime("%Y-%m-%d", time.gmtime(when)),
+                     "person": p["id"], "name": p["name"], "level": p["base_level"],
+                     "model": log.get("model_group") or "-", "project": project,
+                     "source": "workspace" if "workspace" in (_source(log), tags.get("source")) else "app",
+                     "prompt_tokens": int(log.get("prompt_tokens") or 0),
+                     "completion_tokens": int(log.get("completion_tokens") or 0),
+                     "spend": float(log.get("spend") or 0), "ok": log.get("status") != "failure"})
+    return rows
+
+
+def _sum(rows: list[dict]) -> dict:
+    return {"calls": len(rows), "prompt_tokens": sum(r["prompt_tokens"] for r in rows),
+            "completion_tokens": sum(r["completion_tokens"] for r in rows),
+            "spend": round(sum(r["spend"] for r in rows), 6), "failed": sum(1 for r in rows if not r["ok"])}
+
+
+def _group(rows: list[dict], key: str) -> dict:
+    groups = collections.defaultdict(list)
+    for r in rows:
+        groups[r[key]].append(r)
+    return {k: _sum(v) for k, v in sorted(groups.items(), key=lambda kv: -sum(r["spend"] for r in kv[1]))}
+
+
+@app.get("/api/govern/usage")
+def usage(person: str, days: int = 14) -> dict:
+    """Token and cost tracking from the gateway's spend log, with each person's limits."""
+    _require_govern(person)
+    days = max(1, min(30, days))
+    rows = _usage_rows(days)
+    keys = {k.get("key_alias"): k for k in services.gateway_admin(
+        "/key/list?return_full_object=true&size=100").get("keys", []) if isinstance(k, dict)}
+    people_out = []
+    for p in roles.people():
+        mine = [r for r in rows if r["person"] == p["id"]]
+        k = keys.get(f"{p['id']}-{p['base_level']}", {})
+        people_out.append({"id": p["id"], "name": p["name"], "level": p["base_level"], **_sum(mine),
+                           "models": _group(mine, "model"), "budget": k.get("max_budget"),
+                           "spent_period": k.get("spend", 0.0), "rpm_limit": k.get("rpm_limit"),
+                           "tpm_limit": k.get("tpm_limit"), "blocked": bool(k.get("blocked"))})
+    daily = collections.defaultdict(lambda: collections.defaultdict(float))
+    for r in rows:
+        daily[r["day"]][r["model"]] += r["prompt_tokens"] + r["completion_tokens"]
+    days_list = [time.strftime("%Y-%m-%d", time.gmtime(time.time() - i * 86400)) for i in range(days - 1, -1, -1)]
+    return {"days": days, "totals": _sum(rows), "people": people_out, "models": _group(rows, "model"),
+            "projects": _group(rows, "project"), "sources": _group(rows, "source"),
+            "daily": [{"day": d, "tokens": dict(daily.get(d, {}))} for d in days_list],
+            "catalog": roles.catalog()}
+
+
+@app.get("/api/govern/usage.csv")
+def usage_csv(person: str, days: int = 30) -> Response:
+    _require_govern(person)
+    rows = _usage_rows(max(1, min(30, days)))
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=["time", "person", "name", "level", "project", "source", "model",
+                                        "prompt_tokens", "completion_tokens", "spend", "ok"], extrasaction="ignore")
+    w.writeheader()
+    w.writerows(rows)
+    return Response(buf.getvalue(), media_type="text/csv", headers={
+        "Content-Disposition": f'attachment; filename="rolespace-usage-{time.strftime("%Y%m%d")}.csv"'})
+
+
+# --- Onboarding: a Govern admin adds a person by email --------------------------------------
+
+class MemberIn(BaseModel):
+    person: str
+    email: str = Field(max_length=120)
+    name: str = Field(max_length=80)
+    title: str = Field(default="", max_length=80)
+    team: str = Field(max_length=40)
+    level: str = Field(max_length=20)
+    projects: list[str] = Field(default_factory=list, max_length=20)
+    models: list[str] = Field(default_factory=list, max_length=10)
+    budget_usd: float = Field(ge=0, le=MAX_BUDGET_USD, allow_inf_nan=False)
+
+
+@app.post("/api/govern/members", dependencies=[Depends(require_passcode)])
+def add_member(body: MemberIn) -> dict:
+    """Create the person's gateway key (their models, budget and limits), store it in Secret
+    Manager, and add them to RoleSpace. Build-level workspaces are queued for the Coder VM."""
+    admin = _require_govern(body.person)
+    _load_members(force=True)
+    m = body.model_dump(exclude={"person"})
+    m.update(email=m["email"].strip().lower(), name=m["name"].strip(), title=m["title"].strip())
+    errors = roles.validate_member(m)
+    if errors:
+        raise HTTPException(400, " ".join(errors))
+    mid, cfg = roles.member_id(m["email"]), roles.config()
+    secret_name, lvl = f"gw-key-{mid}", cfg["levels"][m["level"]]
+    try:
+        services.ensure_secret(secret_name)   # before the key exists: never mint a key we can't keep
+    except gexc.PermissionDenied:
+        raise HTTPException(403, "RoleSpace's service account can't create secrets yet. Grant it Secret "
+                                 "Manager Admin limited to secrets named gw-key-* (docs/setup-gcp.md). "
+                                 "Nothing was created.")
+    try:
+        services.gateway_admin("/user/new", {"user_id": m["email"], "user_email": m["email"],
+                                             "user_alias": m["name"], "user_role": "internal_user",
+                                             "auto_create_key": False})
+    except services.UpstreamError:
+        pass   # already a gateway user
+    alias = f"{mid}-{m['level']}"
+    stale = services.key_info(alias)   # aliases are unique at the gateway
+    if stale.get("token") and not stale.get("blocked"):
+        raise HTTPException(409, f"A live gateway key named {alias} already exists. Nothing was created.")
+    if stale.get("token"):   # left blocked when someone with this id was removed earlier
+        services.gateway_admin("/key/delete", {"keys": [stale["token"]]})
+    settings = {"user_id": m["email"], "key_alias": alias, "models": m["models"],
+                "max_budget": m["budget_usd"], "budget_duration": cfg["budget_period"],
+                "allowed_routes": ["llm_api_routes"],
+                "metadata": {"person": mid, "level": m["level"], "team": m["team"], "projects": m["projects"]}}
+    settings.update({k: lvl[k] for k in ("rpm_limit", "tpm_limit") if lvl.get(k)})
+    key = services.gateway_admin("/key/generate", settings)["key"]
+    try:
+        services.add_secret_version(secret_name, key)
+    except Exception:
+        services.gateway_admin("/key/delete", {"keys": [key]})   # don't leave a key nobody holds
+        raise
+    member = {**m, "id": mid, "status": "active", "created_by": admin["id"],
+              "workspace": "queued" if m["level"] == "build" else "none"}
+    services.save_member(member)
+    services.audit("member_added", admin["id"], "govern",
+                   f"{m['name']} ({m['email']}) added at {m['level']} level; projects {', '.join(m['projects'])}; "
+                   f"models {', '.join(m['models'])}; budget ${m['budget_usd']:.2f}", target=mid)
+    _load_members(force=True)
+    _invalidate()
+    steps = [f"Gateway key {mid}-{m['level']}: {', '.join(m['models'])}, ${m['budget_usd']:.2f} per "
+             f"{cfg['budget_period']}, model routes only",
+             f"Key stored in Secret Manager as {secret_name}",
+             f"Projects: {', '.join(cfg['projects'][x]['name'] for x in m['projects'])}",
+             "They sign in with Google and find their level, tools and budget waiting"]
+    if m["level"] == "build":
+        steps.append("Coder workspace queued: run coder/sync_build_keys.sh to hand the key to the workspace VM")
+    return {"id": mid, "steps": steps}
+
+
+@app.post("/api/govern/members/{mid}/remove", dependencies=[Depends(require_passcode)])
+def remove_member(mid: str, body: PersonIn) -> dict:
+    """Offboarding: block the person's key at the gateway and take them out of RoleSpace."""
+    admin = _require_govern(body.person)
+    if any(p["id"] == mid for p in roles.config()["people"]):
+        raise HTTPException(400, "People listed in role.yaml are removed by editing role.yaml")
+    member = next((x for x in services.list_members() if x["id"] == mid and x.get("status") == "active"), None)
+    if not member:
+        raise HTTPException(404, "No such member")
+    services.key_block(mid, True)
+    services.update_member(mid, status="removed", removed_by=admin["id"])
+    services.audit("member_removed", admin["id"], "govern", f"{member['name']} removed; key blocked", target=mid)
+    _load_members(force=True)
+    _invalidate()
+    return {"ok": True}

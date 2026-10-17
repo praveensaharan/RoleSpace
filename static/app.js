@@ -96,8 +96,10 @@ const isGov = (p) => p.level === "govern";
 const ROUTES = {
   assistant: { label: "Assistant", icon: "message", group: "Work", render: renderAssistant },
   requests: { label: "Requests", icon: "inbox", group: "Work", render: renderRequests },
+  changes: { label: "Changes", icon: "pr", group: "Work", show: (p) => p.tools.includes("propose_edit") || isGov(p), render: renderChanges },
   workspace: { label: "Workspace", icon: "terminal", group: "Work", show: (p) => p.level === "build", render: renderWorkspace },
   overview: { label: "Overview", icon: "chart", group: "Govern", show: isGov, render: renderOverview },
+  usage: { label: "Usage", icon: "key", group: "Govern", show: isGov, render: renderUsage },
   people: { label: "People & access", icon: "users", group: "Govern", show: isGov, render: renderPeople },
   policy: { label: "Policy", icon: "shield", group: "Govern", show: isGov, render: renderPolicy },
   audit: { label: "Audit log", icon: "file", group: "Govern", show: isGov, render: renderAudit },
@@ -155,10 +157,10 @@ function toast(msg, kind = "ok") {
   setTimeout(() => t.remove(), kind === "bad" ? 7000 : 4000);
 }
 
-function modal({ title, sub = "", body, confirm, danger = false, onConfirm, onCancel }) {
+function modal({ title, sub = "", body, confirm, danger = false, onConfirm, onCancel, wide = false }) {
   const wrap = document.createElement("div");
   wrap.className = "backdrop";
-  wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  wrap.innerHTML = `<div class="modal${wide ? " wide" : ""}" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-head"><h3 id="modal-title">${esc(title)}</h3>${sub ? `<p>${esc(sub)}</p>` : ""}</div>
     <form class="modal-body" novalidate>${body}</form>
     <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button>
@@ -352,7 +354,10 @@ function renderAssistant(page) {
   const p = me();
   page.innerHTML = `<div class="assistant">
     <section class="panel thread" aria-label="Conversation">
-      <div class="panel-head"><h2>Assistant <span class="sub">${cap(p.level)} level · answers come only from ${esc(S.info.repo)}</span></h2>
+      <div class="panel-head"><h2>Assistant <span class="sub">${cap(p.level)} level · ${esc(projectName(currentProject(p)))}</span></h2>
+        <label class="model-pick" title="Models your level allows. The gateway enforces the same list on your key.">
+          <span class="muted small">Model</span><select id="model-pick" class="input sm">${(p.models || []).map((m) =>
+            `<option value="${esc(m)}" ${m === currentModel(p) ? "selected" : ""}>${esc(modelLabel(m))}</option>`).join("")}</select></label>
         <button class="btn sm ghost" data-action="new-chat">${icon("plus")} New chat</button></div>
       <div class="messages" id="messages" aria-live="polite"></div>
       <div class="composer">
@@ -362,6 +367,7 @@ function renderAssistant(page) {
       </div>
     </section>
     <aside class="rail" id="rail" aria-label="Your access"></aside></div>`;
+  $("#model-pick")?.addEventListener("change", (e) => { (S.model ||= {})[p.id] = e.target.value; });
   const q = $("#q");
   q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
   q.addEventListener("input", () => { q.style.height = "auto"; q.style.height = Math.min(180, q.scrollHeight) + "px"; });
@@ -513,7 +519,8 @@ async function send(text) {
   if (S.me === who) renderMessages();
   const slot = msgs.length - 1;
   try {
-    msgs[slot] = { r: await api("/api/chat", { person: who, message: q }),
+    const pw = S.info.people.find((x) => x.id === who);
+    msgs[slot] = { r: await api("/api/chat", { person: who, message: q, model: currentModel(pw), project: currentProject(pw) }),
                    at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) };
   } catch (e) {
     msgs[slot] = { error: e.message, retry: q };
@@ -747,7 +754,8 @@ function splitTable(obj, label) {
 
 // One series, so one colour and no legend; columns at most 24 px, 4 px rounded tops,
 // hairline grid, the largest day labelled, every value on hover and in the tooltip.
-function spendChart(days) {
+const dollarTick = (t) => "$" + (t < 1 && t > 0 ? t.toFixed(2) : t.toFixed(t % 1 ? 1 : 0));
+function spendChart(days, fmt = money, tick = dollarTick, what = "AI spend") {
   const W = 640, H = 230, L = 44, R = 8, T = 18, B = 26, max = Math.max(...days.map((d) => d.spend), 0);
   const top = niceMax(max), slot = (W - L - R) / days.length, bw = Math.min(24, slot * 0.62);
   const y = (v) => T + (H - T - B) * (1 - v / top);
@@ -755,14 +763,14 @@ function spendChart(days) {
   const col = (x, yy, w, h) => { const r = Math.min(4, h, w / 2);
     return `M${x},${yy + h}V${yy + r}Q${x},${yy} ${x + r},${yy}H${x + w - r}Q${x + w},${yy} ${x + w},${yy + r}V${yy + h}Z`; };
   const peak = days.reduce((a, d, i) => (d.spend > days[a].spend ? i : a), 0);
-  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily AI spend, last 14 days, peak ${money(max)}">
-    ${ticks.map((t) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 8}" y="${y(t) + 4}" text-anchor="end">$${t < 1 && t > 0 ? t.toFixed(2) : t.toFixed(t % 1 ? 1 : 0)}</text>`).join("")}
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily ${what}, last ${days.length} days, peak ${fmt(max)}">
+    ${ticks.map((t) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 8}" y="${y(t) + 4}" text-anchor="end">${tick(t)}</text>`).join("")}
     ${days.map((d, i) => { const x = L + i * slot + (slot - bw) / 2, h = (H - T - B) - (y(d.spend) - T), lab = new Date(d.day + "T00:00:00Z");
       const short = lab.toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" });
       return `${h > 0.5 ? `<path class="bar" d="${col(x, y(d.spend), bw, h)}"/>` : ""}
-        <rect x="${L + i * slot}" y="${T}" width="${slot}" height="${H - T - B}" fill="transparent" tabindex="0" data-tip="${esc(short)}|${money(d.spend)}"/>
+        <rect x="${L + i * slot}" y="${T}" width="${slot}" height="${H - T - B}" fill="transparent" tabindex="0" data-tip="${esc(short)}|${fmt(d.spend)}"/>
         ${i % 2 === 1 || i === days.length - 1 ? `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(short)}</text>` : ""}
-        ${i === peak && max > 0 ? `<text x="${x + bw / 2}" y="${y(d.spend) - 6}" text-anchor="middle" style="fill:var(--ink);font-weight:600">${money(d.spend)}</text>` : ""}`; }).join("")}
+        ${i === peak && max > 0 ? `<text x="${x + bw / 2}" y="${y(d.spend) - 6}" text-anchor="middle" style="fill:var(--ink);font-weight:600">${fmt(d.spend)}</text>` : ""}`; }).join("")}
     </svg></div>`;
 }
 function niceMax(v) {
@@ -777,7 +785,8 @@ async function renderPeople(page, id) {
   page.innerHTML = `<div class="page-head"><div class="t"><h1>People & access</h1>
     <p>Each person's level comes from role.yaml and is enforced on their own gateway key: models, budget, and a kill switch that
       stops every call from the app and their workspace at once.</p></div>
-    <div class="actions"><button class="btn" data-action="refresh">${icon("refresh")} Refresh</button></div></div>
+    <div class="actions"><button class="btn" data-action="refresh">${icon("refresh")} Refresh</button>
+      <button class="btn primary" data-action="onboard">${icon("plus")} Add person</button></div></div>
     <section class="panel"><div class="panel-body flush" id="people-table"><div class="panel-body"><div class="skeleton"></div></div></div></section>
     <section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Temporary access</h2>
       <span class="small muted">Rule: ${esc(Object.entries(S.info.elevation?.allow || {}).map(([a, b]) => `${a} → ${b.join(", ")}`).join("; ") || "none")}, at most ${esc(S.info.elevation?.max_hours ?? 8)} h</span></div>
@@ -790,7 +799,7 @@ async function renderPeople(page, id) {
     <th>Spend</th><th>Pace</th><th class="num">Calls</th><th>Status</th><th></th></tr></thead><tbody>
     ${g.people.map((p) => { const pct = p.budget ? Math.min(100, (100 * p.spent) / p.budget) : 0;
       return `<tr><td><div class="person"><span class="avatar ${p.level}">${esc(p.name.split(" ").map((w) => w[0]).join(""))}</span>
-        <div><b>${esc(p.name)}</b><small>${esc(p.title)} · ${esc(p.team)}</small></div></div></td>
+        <div><b>${esc(p.name)}</b><small>${esc(p.title)} · ${esc(p.team)}${p.onboarded ? " · added in RoleSpace" : ""}</small></div></div></td>
       <td><span class="lvl ${p.level}">${p.level}</span>${p.grant ? `<div class="small muted" style="margin-top:4px">${icon("zap")} from ${esc(p.base_level)}, until ${clock(p.grant.expires_at)}</div>` : ""}</td>
       <td>${p.models.map((m) => `<code>${esc(m)}</code>`).join(" ")}</td>
       <td><div class="spend"><div class="row"><span>${money(p.spent)}</span><span class="muted">of ${money(p.budget)}</span></div>
@@ -802,6 +811,7 @@ async function renderPeople(page, id) {
         <button class="btn sm" data-action="budget" data-id="${esc(p.id)}" data-v="${p.budget ?? ""}" data-name="${esc(p.name)}">Budget</button>
         ${p.id === S.me ? "" : p.blocked_key ? `<button class="btn sm" data-action="suspend" data-id="${esc(p.id)}" data-name="${esc(p.name)}" data-s="0">${icon("power")} Restore</button>`
           : `<button class="btn sm danger" data-action="suspend" data-id="${esc(p.id)}" data-name="${esc(p.name)}" data-s="1">${icon("power")} Suspend</button>`}
+        ${p.onboarded ? `<button class="btn sm ghost" data-action="remove-member" data-id="${esc(p.id)}" data-name="${esc(p.name)}">Remove</button>` : ""}
       </div></td></tr>`; }).join("")}</tbody></table></div>`;
   $("#grants").innerHTML = g.grants.length ? `<table class="table"><thead><tr><th>Person</th><th>Level</th><th>Ends</th><th>Approved by</th><th>Reason</th><th></th></tr></thead><tbody>${
     g.grants.map((x) => `<tr><td>${esc(S.info.people.find((p) => p.id === x.person)?.name || x.person)}</td>
@@ -846,6 +856,164 @@ function endGrant(el) {
   actOnRequest({ dataset: { id: rid, a: "revoke" }, disabled: false });
 }
 
+
+// ---- models and projects -------------------------------------------------------------------
+
+const modelLabel = (m) => S.info.catalog?.[m]?.label || m;
+const projectName = (id) => S.info.projects?.[id]?.name || id || S.info.repo;
+function currentModel(p) {
+  const pick = S.model?.[p.id];
+  return (p.models || []).includes(pick) ? pick : p.agent_model;
+}
+function currentProject(p) {
+  const pick = S.project?.[p.id];
+  return (p.projects || []).includes(pick) ? pick : (p.projects || [])[0];
+}
+
+// ---- Changes: pull requests opened for people without GitHub accounts ----------------------
+
+const PR_STATE = { open: ["info", "Open"], merged: ["ok", "Merged"], closed: ["", "Closed"] };
+const CHECKS = { passing: ["ok", "Checks passing"], failing: ["bad", "Checks failing"], pending: ["warn", "Checks running"], none: ["", "No checks"] };
+
+async function renderChanges(page, id) {
+  const p = me();
+  page.innerHTML = `<div class="page-head"><div class="t"><h1>Changes</h1>
+    <p>${isGov(p) ? "Every pull request RoleSpace opened for someone." : "Your pull requests."} Nobody needs a GitHub account: RoleSpace
+      opens each one for them, the commit is in their name, and the CI check and a human review still decide what merges.</p></div>
+    <div class="actions"><button class="btn" data-action="refresh">${icon("refresh")} Refresh</button></div></div>
+    <section class="panel"><div class="panel-body flush" id="changes"><div class="panel-body"><div class="skeleton"></div></div></div></section>`;
+  let d;
+  try { d = await api("/api/changes?person=" + p.id); }
+  catch (e) { if (id === S.renderId) $("#changes").innerHTML = `<div class="empty"><b>Couldn't load changes</b>${esc(e.message)}</div>`; return; }
+  if (id !== S.renderId) return;
+  if (!d.changes.length) {
+    $("#changes").innerHTML = `<div class="empty"><b>No pull requests yet</b>Ask the assistant for a change inside your allow-list, review the diff, and click Open pull request.</div>`;
+    return;
+  }
+  $("#changes").innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>Change</th>${isGov(p) ? "<th>For</th>" : ""}<th>Status</th><th>Checks</th><th>Review</th><th>Opened</th><th></th></tr></thead><tbody>
+    ${d.changes.map((c) => { const [sc, sl] = PR_STATE[c.state] || ["", c.state || "–"]; const [cc, cl] = CHECKS[c.checks] || ["", c.checks || "–"];
+      return `<tr><td><b style="font-weight:600">${esc(c.title || c.detail)}</b>${c.number ? `<div class="hash" style="margin-top:4px">#${c.number}</div>` : ""}${c.error ? `<div class="small" style="color:#b91c1c">${esc(c.error)}</div>` : ""}</td>
+        ${isGov(p) ? `<td>${esc(c.name)}</td>` : ""}<td><span class="badge ${sc}">${esc(sl)}</span></td><td><span class="badge ${cc}">${esc(cl)}</span></td>
+        <td class="small">${esc(c.review || "–")}${c.comments ? ` · ${c.comments} comment${c.comments > 1 ? "s" : ""}` : ""}</td>
+        <td class="muted" title="${esc(c.opened)}">${esc(ago(c.opened))}</td>
+        <td class="num"><a class="btn sm" href="${esc(c.url)}" target="_blank" rel="noopener">${icon("external")} View</a></td></tr>`; }).join("")}</tbody></table></div>`;
+}
+
+// ---- Govern: Usage ---------------------------------------------------------------------------
+
+const tok = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(n || 0);
+
+async function renderUsage(page, id) {
+  S.usageDays ||= 14;
+  page.innerHTML = `<div class="page-head"><div class="t"><h1>Usage</h1>
+    <p>Tokens and cost for every model call, by person, model, project and source, straight from the gateway's log. Limits are
+      enforced on each person's key: budget, requests and tokens per minute.</p></div>
+    <div class="actions"><div class="seg">${[7, 14, 30].map((n) => `<button class="${S.usageDays === n ? "on" : ""}" data-action="usage-days" data-n="${n}">${n} days</button>`).join("")}</div>
+      <a class="btn" href="/api/govern/usage.csv?person=${esc(S.me)}&days=${S.usageDays}">${icon("download")} CSV</a></div></div>
+    <div id="usage"><div class="kpis">${'<section class="panel kpi"><div class="skeleton" style="width:50%"></div><div class="skeleton" style="height:28px;margin-top:10px"></div></section>'.repeat(4)}</div></div>`;
+  let u;
+  try { u = await api(`/api/govern/usage?person=${S.me}&days=${S.usageDays}`); }
+  catch (e) { if (id === S.renderId) $("#usage").innerHTML = `<div class="callout bad">${icon("alert")}<div><b>${esc(e.message)}</b></div></div>`; return; }
+  if (id !== S.renderId) return;
+  const t = u.totals;
+  const split = (obj, label, fmt) => `<table class="table"><thead><tr><th>${label}</th><th class="num">Calls</th><th class="num">Tokens in</th><th class="num">Tokens out</th><th class="num">Cost</th></tr></thead><tbody>${
+    Object.entries(obj).map(([k, v]) => `<tr><td>${fmt(k)}</td><td class="num">${v.calls}</td><td class="num">${tok(v.prompt_tokens)}</td><td class="num">${tok(v.completion_tokens)}</td><td class="num">${money(v.spend)}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="muted">No calls in this window</td></tr>`}</tbody></table>`;
+  $("#usage").innerHTML = `
+    <div class="kpis">
+      ${kpi("Tokens in", tok(t.prompt_tokens), `last ${u.days} days · prompts and code read`, "download")}
+      ${kpi("Tokens out", tok(t.completion_tokens), "answers, edits and tool calls", "send")}
+      ${kpi("Cost", money(t.spend), `last ${u.days} days, all models`, "key")}
+      ${kpi("Model calls", t.calls.toLocaleString(), t.failed ? `${t.failed} blocked or failed` : "none blocked or failed", "server")}</div>
+    <section class="panel" style="margin-top:16px"><div class="panel-head"><h2>By person <span class="sub">limits are on each person's key</span></h2></div>
+      <div class="panel-body flush"><div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th class="num">Calls</th><th class="num">Tokens in</th>
+        <th class="num">Tokens out</th><th class="num">Cost</th><th>Budget this period</th><th>Rate limits</th><th>Models used</th></tr></thead><tbody>
+        ${u.people.map((p) => { const pct = p.budget ? Math.min(100, (100 * p.spent_period) / p.budget) : 0;
+          return `<tr><td><div class="person"><span class="avatar sm ${p.level}">${esc(p.name[0])}</span><div><b>${esc(p.name)}</b><small>${p.level}</small></div></div></td>
+            <td class="num">${p.calls}</td><td class="num">${tok(p.prompt_tokens)}</td><td class="num">${tok(p.completion_tokens)}</td><td class="num">${money(p.spend)}</td>
+            <td><div class="spend"><div class="row"><span>${money(p.spent_period)}</span><span class="muted">of ${money(p.budget)}</span></div>
+              <div class="meter ${pct >= 100 ? "bad" : pct >= 80 ? "warn" : ""}"><i style="width:${pct}%"></i></div></div></td>
+            <td class="small muted">${p.rpm_limit ? `${p.rpm_limit} req/min` : "–"}<br>${p.tpm_limit ? `${tok(p.tpm_limit)} tokens/min` : ""}</td>
+            <td class="small">${Object.entries(p.models).map(([m, v]) => `<span class="badge" title="${v.calls} calls">${esc(modelLabel(m))} · ${money(v.spend)}</span>`).join(" ") || '<span class="muted">–</span>'}</td></tr>`; }).join("")}
+        </tbody></table></div></div></section>
+    <div class="g3" style="margin-top:16px">
+      <section class="panel"><div class="panel-head"><h2>Tokens per day <span class="sub">in + out, all models</span></h2></div>
+        <div class="panel-body">${tokenChart(u.daily)}</div></section>
+      <section class="panel"><div class="panel-head"><h2>By project</h2></div><div class="panel-body flush">${split(u.projects, "Project", (k) => esc(projectName(k)))}</div></section></div>
+    <div class="g2" style="margin-top:16px">
+      <section class="panel"><div class="panel-head"><h2>By model</h2></div><div class="panel-body flush">${split(u.models, "Model",
+        (k) => `${esc(modelLabel(k))}<div class="small muted">${esc(u.catalog?.[k]?.provider || "")}</div>`)}</div></section>
+      <section class="panel"><div class="panel-head"><h2>By where it ran</h2></div><div class="panel-body flush">${split(u.sources, "Source", (k) => `<code>${esc(k)}</code>`)}</div>
+        <div class="panel-foot">app = the assistant · workspace = Gemini CLI in Coder · each call is tagged by project, source and level</div></section></div>`;
+}
+
+function tokenChart(days) {
+  return spendChart(days.map((d) => ({ day: d.day, spend: Object.values(d.tokens).reduce((a, b) => a + b, 0) })), tok, tok, "tokens");
+}
+
+// ---- Govern: onboarding ------------------------------------------------------------------
+
+function onboard() {
+  const L = S.info.levels, teams = Object.keys(S.info.teams || {}), projects = Object.entries(S.info.projects || {});
+  const catalog = S.info.catalog || {};
+  modal({
+    title: "Add a person", wide: true,
+    sub: "RoleSpace creates their own gateway key with the models, budget and limits you choose, stores it in Secret Manager, and gives them their level when they sign in with Google.",
+    confirm: "Create access",
+    body: `<div class="g2" style="gap:12px">
+        <label class="field">Work email<input class="input" name="email" type="email" placeholder="name@${esc(S.info.company_domain || "company.com")}" required></label>
+        <label class="field">Full name<input class="input" name="name" required></label></div>
+      <div class="g2" style="gap:12px">
+        <label class="field">Job title<input class="input" name="title" placeholder="e.g. Product manager"></label>
+        <label class="field">Team<select class="input" name="team">${teams.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}</select></label></div>
+      <label class="field">Level<select class="input" name="level" id="ob-level">${Object.keys(L).map((k) => `<option value="${k}">${cap(k)} · ${esc(LEVEL_TEXT[k])}</option>`).join("")}</select></label>
+      <div class="field">Projects<div class="checks">${projects.map(([k, v]) => `<label><input type="checkbox" name="projects" value="${esc(k)}" checked> ${esc(v.name)} <span class="muted small">${esc(v.repo)}</span></label>`).join("")}</div></div>
+      <div class="field">Models<div class="checks" id="ob-models"></div></div>
+      <label class="field">Monthly AI budget (USD) <span class="hint">Enforced by the gateway on their key.</span><input class="input" name="budget" id="ob-budget" type="number" min="0" max="20" step="0.5"></label>
+      <div class="plan" id="ob-plan"></div>`,
+    onConfirm: async (f) => {
+      const body = { person: S.me, email: String(f.get("email") || ""), name: String(f.get("name") || ""), title: String(f.get("title") || ""),
+        team: f.get("team"), level: f.get("level"), projects: f.getAll("projects"), models: f.getAll("models"), budget_usd: parseFloat(f.get("budget")) };
+      const r = await api("/api/govern/members", body);
+      toast(`${body.name} can sign in now.`);
+      modal({ title: `${body.name} is set up`, confirm: "Done", body: `<ul class="caps">${r.steps.map((s) => `<li class="yes">${icon("check")}<span>${esc(s)}</span></li>`).join("")}</ul>`, onConfirm: () => {} });
+      await refreshPeople(); render();
+    },
+  });
+  const form = $(".modal form"), level = $("#ob-level", form);
+  const sync = () => {
+    const l = L[level.value];
+    $("#ob-models", form).innerHTML = Object.entries(catalog).map(([k, v]) => {
+      const inLevel = l.models.includes(k), on = v.status === "enabled";
+      return `<label class="${inLevel && on ? "" : "off"}" title="${esc(!on ? v.note || "Not enabled yet" : inLevel ? "" : "Not allowed at this level")}">
+        <input type="checkbox" name="models" value="${esc(k)}" ${inLevel && on ? "checked" : "disabled"}> ${esc(v.label)} <span class="muted small">${esc(v.provider)}${!on ? " · not enabled yet" : !inLevel ? " · not at this level" : ""}</span></label>`; }).join("");
+    $("#ob-budget", form).value = l.budget_usd;
+    plan();
+  };
+  const plan = () => {
+    const fd = new FormData(form), l = L[fd.get("level")], ms = fd.getAll("models");
+    $("#ob-plan", form).innerHTML = `<b>What RoleSpace will create</b><ul>
+      <li>A gateway key with ${ms.length ? ms.map(modelLabel).join(", ") : "no models"}, ${money(parseFloat(fd.get("budget")) || 0)} per ${esc(S.info.budget_period)}${l.rpm_limit ? `, ${l.rpm_limit} requests and ${tok(l.tpm_limit)} tokens per minute` : ""}, model routes only</li>
+      <li>${esc(cap(fd.get("level")))} level: ${l.tools.includes("propose_edit") ? "answers and pull-request edits" : "answers only, no writes"}${l.allow_paths.length ? ` inside ${l.allow_paths.join(", ")}` : ""}</li>
+      ${fd.get("level") === "build" ? "<li>A Coder workspace, queued for the private VM</li>" : ""}
+      <li>An audit event naming you as the approver</li></ul>`;
+  };
+  level.addEventListener("change", sync);
+  form.addEventListener("input", plan);
+  sync();
+}
+
+function removeMember(el) {
+  const { id, name } = el.dataset;
+  modal({ title: `Remove ${name}?`, danger: true, confirm: "Remove access",
+    sub: "Their gateway key is blocked at once and they leave RoleSpace. The audit log keeps everything they did.",
+    body: "", onConfirm: async () => {
+      await api(`/api/govern/members/${encodeURIComponent(id)}/remove`, { person: S.me });
+      toast(`${name} no longer has access.`);
+      await refreshPeople(); render();
+    } });
+}
+
 // ---- Govern: Policy ------------------------------------------------------------------------
 
 async function renderPolicy(page, id) {
@@ -876,6 +1044,12 @@ async function renderPolicy(page, id) {
           <tr><td>Admin screens</td>${names.map((n) => `<td>${yes(n === "govern")}</td>`).join("")}</tr>
         </tbody></table></div></div>
         <div class="panel-foot">Suggest may edit ${(L.suggest?.allow_paths || []).map((a) => `<code>${esc(a)}</code>`).join(", ")} only, and every edit is a pull request with a CI check and one human review.</div></section></div>
+    <section class="panel" style="margin-top:16px"><div class="panel-head"><h2>Model catalog <span class="sub">one gateway, many providers; each key decides who may use what</span></h2></div>
+      <div class="panel-body flush"><table class="table"><thead><tr><th>Model</th><th>Provider</th><th>Status</th><th>Levels</th></tr></thead><tbody>
+      ${Object.entries(S.info.catalog || {}).map(([k, v]) => `<tr><td><b style="font-weight:600">${esc(v.label)}</b><div class="hash">${esc(k)}</div></td>
+        <td>${esc(v.provider)}</td><td>${v.status === "enabled" ? '<span class="badge ok">Enabled</span>' : `<span class="badge" title="${esc(v.note || "")}">Available</span><div class="small muted" style="margin-top:4px;max-width:340px">${esc(v.note || "")}</div>`}</td>
+        <td>${Object.entries(L).filter(([, l]) => l.models.includes(k)).map(([n]) => `<span class="lvl ${n}">${n}</span>`).join(" ") || '<span class="muted small">none yet</span>'}</td></tr>`).join("")}
+      </tbody></table></div></section>
     <section class="panel" style="margin-top:16px"><div class="panel-head"><h2>role.yaml</h2><span class="hash">sha256 ${esc(S.info.policy_version)}…</span></div>
       <div class="panel-body flush" id="yaml"><div class="panel-body"><div class="skeleton"></div></div></div></section>`;
   const fillList = () => {
@@ -1011,6 +1185,9 @@ const ACTIONS = {
   budget: (el) => editBudget(el),
   suspend: (el) => suspend(el),
   "end-grant": (el) => endGrant(el),
+  onboard: () => onboard(),
+  "remove-member": (el) => removeMember(el),
+  "usage-days": (el) => { S.usageDays = Number(el.dataset.n); renderUsage($("#page"), S.renderId); },
 };
 
 document.addEventListener("click", (e) => {

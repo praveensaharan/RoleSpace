@@ -115,6 +115,45 @@ If your project isn't in a Google Cloud organization, or users sign in with acco
 1. In **Google Auth Platform → Branding**, set the audience to **External**, then publish the app or add test users.
 2. In **IAP → Settings**, choose **Custom OAuth** and **Auto Generate Credentials**.
 
+## Onboarding new people
+
+Govern → People → **Add person** creates the person's gateway key and stores it as the secret `gw-key-<id>`. The app's service account can read secrets but not create them, so grant two narrow custom roles:
+- **Create secrets.** This gives no access to existing ones.
+- **Add versions,** only to secrets whose names start with `gw-key-`. The app then can't overwrite `github-token` or `litellm-master-key`.
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
+SA=serviceAccount:rolespace-run@$PROJECT.iam.gserviceaccount.com
+gcloud iam roles create rolespaceSecretCreator --project=$PROJECT \
+  --title="RoleSpace: create secrets" --permissions=secretmanager.secrets.create
+gcloud projects add-iam-policy-binding $PROJECT --member=$SA \
+  --role=projects/$PROJECT/roles/rolespaceSecretCreator --condition=None
+gcloud iam roles create rolespaceKeyWriter --project=$PROJECT \
+  --title="RoleSpace: store gateway keys" --permissions=secretmanager.versions.add
+gcloud projects add-iam-policy-binding $PROJECT --member=$SA \
+  --role=projects/$PROJECT/roles/rolespaceKeyWriter \
+  --condition="expression=resource.name.startsWith('projects/$PROJECT_NUMBER/secrets/gw-key-'),title=gw-key secrets only"
+```
+
+Without these roles, **Add person** stops at its first step, creates nothing, and says which grant is missing.
+
+After you change `rpm_limit` or `tpm_limit` in `role.yaml`, run `python gateway/provision_keys.py` again so existing keys get the new limits.
+
+## More models
+
+`role.yaml` lists every model in its `models:` catalog. Models marked `available` need one step before an admin switches them on:
+- **Claude on Vertex AI:**
+  1. Enable the model in Vertex AI Model Garden.
+  2. Uncomment `claude-opus` in `gateway/config.yaml` and redeploy the gateway.
+  3. Set its status to `enabled` and add it to a level's `models`.
+  4. Run `gateway/provision_keys.py`.
+- **OpenAI:**
+  1. Store the customer's key as the secret `openai-api-key` and mount it on the gateway as `OPENAI_API_KEY`.
+  2. Uncomment `openai-codex` in `gateway/config.yaml`, with the model id.
+  3. Then follow steps 3 and 4 above.
+
+Re-run the evaluation with a model before enabling it for a level. See [enterprise-design.md](enterprise-design.md) for the full design.
+
 ## Evaluate
 
 ```bash

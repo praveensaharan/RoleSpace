@@ -62,6 +62,35 @@ def test_citation_parser_skips_non_citations_and_duplicates():
     assert [(c["start"], c["end"]) for c in ranges] == [(3, 4), (8, 8), (10, 12)]
 
 
+def test_models_follow_the_level_and_the_catalog():
+    maya, leo = roles.person("maya"), roles.person("leo")
+    assert roles.person_models(maya) == ["gemini-flash"]
+    assert roles.person_models(leo) == ["gemini-flash", "gemini-pro"]
+    assert not roles.model_enabled("claude-opus")            # listed, not switched on yet
+    assert agents.pick_model(maya, "gemini-pro") == "gemini-flash"   # not on her list
+    assert agents.pick_model(leo, "gemini-pro") == "gemini-pro"
+    assert agents.pick_model(leo, "claude-opus") == "gemini-flash"   # not enabled
+
+
+def test_onboarding_checks_the_request():
+    good = {"email": "nina@firstround.example", "name": "Nina Diaz", "team": "screening", "level": "ask",
+            "projects": ["firstround"], "models": ["gemini-flash"], "budget_usd": 2}
+    assert roles.validate_member(good) == []
+    assert roles.member_id("Nina.Diaz@firstround.example") == "nina-diaz"
+    assert roles.validate_member({**good, "email": "nina@gmail.com"})                  # other domain
+    assert roles.validate_member({**good, "email": "maya@firstround.example"})         # already a member
+    assert roles.validate_member({**good, "models": ["gemini-pro"]})                   # not at Ask level
+    assert roles.validate_member({**good, "models": ["claude-opus"]})                  # not enabled
+    assert roles.validate_member({**good, "projects": ["nope"]})
+    assert roles.validate_member({**good, "budget_usd": 50})
+    roles.set_members([{**good, "id": "nina", "status": "active"}])
+    try:
+        assert roles.person("nina")["level_cfg"]["tools"][-1] == "draft_request"
+        assert roles.validate_member(good)                                             # now a duplicate
+    finally:
+        roles.set_members([])
+
+
 def _chain(n: int) -> list[dict]:
     events, prev = [], services.GENESIS
     for i in range(n):

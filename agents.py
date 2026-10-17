@@ -338,9 +338,20 @@ def _blocked(err: Exception) -> dict:
             "message": f"The assistant hit an error ({type(err).__name__}). Nothing was changed; try again."}
 
 
-async def chat(p: dict, message: str, key: str) -> dict:
+def pick_model(p: dict, wanted: str | None) -> str:
+    """The model for this turn: the one the person picked if their level allows it, else the
+    level's default (the gateway key enforces the same list)."""
+    allowed = roles.person_models(p)
+    if wanted in allowed:
+        return wanted
+    default = p["level_cfg"].get("agent_model", "gemini-flash")
+    return default if default in allowed or not allowed else allowed[0]
+
+
+async def chat(p: dict, message: str, key: str, model: str | None = None, project: str | None = None) -> dict:
     """One turn for this person, as RoleSpace sees them now (their level, or a temporary one).
-    `key` names the conversation (browser and person)."""
+    `key` names the conversation (browser and person). Every call is tagged with the project,
+    source and level, so the gateway's spend log can be split that way."""
     pid, cfg = p["id"], p["level_cfg"]
     convo = _conversation(key)
     api_key, iam = await asyncio.gather(asyncio.to_thread(services.person_key, pid),
@@ -356,12 +367,15 @@ async def chat(p: dict, message: str, key: str) -> dict:
             return {"error": f"{tool.name} is not allowed at {p['level']} level"}
         return None
 
-    model_name = cfg.get("agent_model", "gemini-flash")
+    model_name = pick_model(p, model)
+    project = project if project in roles.person_projects(p) else (roles.person_projects(p) or ["default"])[0]
+    tags = f"project:{project},source:app,level:{p['level']},person:{pid}"
+    extra = {"reasoning_effort": cfg.get("reasoning_effort", "low")} if model_name.startswith("gemini") else {}
     agent = LlmAgent(
         name=f"rolespace_{p['level']}",
         model=LiteLlm(model=f"openai/{model_name}", api_base=services.GATEWAY_URL,
-                      api_key=api_key, extra_headers=iam, timeout=90, num_retries=1,
-                      reasoning_effort=cfg.get("reasoning_effort", "low")),
+                      api_key=api_key, extra_headers={**iam, "x-litellm-tags": tags}, timeout=90,
+                      num_retries=1, **extra),
         instruction=lambda _ctx: _instruction(p),
         tools=tools,
         before_tool_callback=guard,
@@ -391,6 +405,7 @@ async def chat(p: dict, message: str, key: str) -> dict:
         "empty": not answer and not blocked and not edits,
         "blocked": blocked,
         "model": model_name,
+        "project": project,
         "level": p["level"],
         "tools": sorted(allowed),
         "trace": trace,

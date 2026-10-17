@@ -80,6 +80,7 @@ def main() -> None:
             # Model calls only: a person's key can't reach /key/generate or other admin routes,
             # so nobody can mint themselves a key without a budget.
             "allowed_routes": ["llm_api_routes"],
+            **{k: level[k] for k in ("rpm_limit", "tpm_limit") if level.get(k)},
         }
         try:
             api(base, master, f"/user/info?user_id={user_id}")
