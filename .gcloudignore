@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__/
+.env
+gateway/
+coder/
+snapshot_repo.sh
+deploy.sh
+eval/
+tests/
+docs/
+.github/
+README.md
+LICENSE

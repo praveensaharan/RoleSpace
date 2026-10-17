@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Try to call Gemini on Vertex AI directly with this VM's own Google identity, skipping the
+# gateway. It should fail: the workspace service account has no Vertex AI role, so the only
+# way to a model is the gateway with your own key.
+set -u
+MD=http://metadata.google.internal/computeMetadata/v1
+PROJECT=$(curl -s -H Metadata-Flavor:Google $MD/project/project-id)
+WHO=$(curl -s -H Metadata-Flavor:Google $MD/instance/service-accounts/default/email)
+TOKEN=$(curl -s -H Metadata-Flavor:Google $MD/instance/service-accounts/default/token | sed -E 's/.*"access_token": *"([^"]+)".*/\1/')
+echo "Calling Vertex AI directly as $WHO ..."
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "https://aiplatform.googleapis.com/v1/projects/$PROJECT/locations/global/publishers/google/models/gemini-3.8-flash:generateContent" \
+  -d '{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}' | grep -E '"(code|status|message)"' | sed 's/^ *//'

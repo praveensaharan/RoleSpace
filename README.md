@@ -1,0 +1,150 @@
+# RoleSpace
+
+**Every role gets the right AI. The company keeps control.**
+
+RoleSpace gives every person in a software company the right amount of AI for their job. One policy file, [`role.yaml`](role.yaml), gives each person a level. The level decides four things: which AI tools they get, which files they may change, which models they may call and how much they may spend. The rules are enforced in code, at the model gateway, in CI and in IAM, never by the prompt.
+
+Built for the **AI Builder Cup 2026** (theme: *Future of Work & Enterprise Productivity*) on Google Cloud: Gemini on Vertex AI, the Agent Development Kit, Cloud Run and Identity-Aware Proxy.
+
+| | |
+|---|---|
+| Live app | https://rolespace.duckdns.org (sign in with Google, then pick a persona) |
+| Demo video (3 min) | *add the link* |
+| Submission deck | [docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx](docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx) · [design deck (PDF)](docs/deck/RoleSpace-deck.pdf) |
+
+![RoleSpace architecture](docs/architecture/hld-1-architecture.png)
+
+## The problem
+
+- New hires take weeks to ship their first change.
+- PMs and designers interrupt developers with "how does this work?" all week.
+- AI tools are bought team by team. Developers get coding agents, everyone else gets nothing, and nobody sees the cost or the risk.
+
+Giving everyone a coding agent is unsafe. Giving no one one wastes their time.
+
+## Four levels
+
+| Level | Who, in the demo | What they get |
+|---|---|---|
+| **Ask** | Maya, product manager | Questions about the code. Answers cite exact lines, and code checks every citation. No writes. A change she asks for becomes a request to the team that owns the code. |
+| **Suggest** | Leo, product designer | Small edits inside a path allow-list (`public/css/**`, `public/**/*.html`). Each edit is a diff preview, then a pull request with a CI check and one human review. |
+| **Build** | Sam, developer | A private Coder workspace with Gemini CLI on his own key. It's reached through an IAP tunnel, with no VPN and no public IP. |
+| **Govern** | Ava, platform admin | Levels, budgets, approvals, a kill switch, spend per person, a hash-chained audit log, and a live architecture view. |
+
+The demo codebase is [praveensaharan/firstround-demo](https://github.com/praveensaharan/firstround-demo). Everyone in `role.yaml` is made up.
+
+## Where the policy is enforced
+
+| Layer | What it stops |
+|---|---|
+| **Agent tools** (`agents.py`) | A level without a write tool can't write, whatever the prompt says. A `before_tool_callback` refuses any tool outside the level as well. |
+| **Code checks** (`roles.py`, `main.py`) | Edits outside the allow-list are refused, including `..` tricks, and the check runs again at the moment of writing. A citation to lines the agent never read is struck out. Text in a file that is aimed at an AI is treated as data, and the attempt is logged. |
+| **Model gateway** (LiteLLM on Cloud Run) | Each person has their own key, with its own model list, budget and kill switch. Keys can call models only, so a key can't mint new keys. |
+| **CI, branch protection and IAM** | Bot PRs outside the allow-list fail CI, and a human must review before merge. Only the gateway's service account may call Vertex AI; a workspace calling Gemini directly gets 403. |
+
+Every decision can explain itself. The person who was blocked sees each check in order, the rule that decided and the policy version, and admins can run the same checks as a simulator.
+
+## Features
+
+- **Verified answers.** Every `[file:line]` citation is checked against lines the agent really read, at a pinned commit.
+- **Edits only as pull requests,** inside a path allow-list, with a diff preview, a CI check and one human review.
+- **Private workspaces:** Coder plus Gemini CLI on each person's own key, reached through an IAP tunnel.
+- **Per-person model keys:** models and budget per level, enforced by the gateway.
+- **Temporary access:** a person asks for a higher level for a few hours, an admin approves, and it ends by itself.
+- **Kill switch:** one click blocks a key, and the assistant, pull requests and workspace all stop at once.
+- **Requests inbox:** a refusal becomes a tracked request to the owning team.
+- **Explain every decision,** plus a policy simulator for admins.
+- **Tamper-evident audit:** each event carries the hash of the one before. A one-click evidence pack (JSON or CSV) is mapped to SOC 2 and ISO 27001.
+- **Govern screens:** overview, spend pace per person, impact numbers, and a live architecture view.
+
+Screenshots are in [docs/screenshots](docs/screenshots).
+
+## Results
+
+Measured with [`eval/run_eval.py`](eval/run_eval.py) on 17 Oct 2026, against the code that is deployed, using the real gateway, Gemini and Coder VM. Details are in [eval/results.md](eval/results.md).
+
+| | |
+|---|---|
+| Questions answered from the expected file | **10 / 10** |
+| Citations verified (every cited line was read) | **92 / 92** |
+| Median answer time | **12.2 s** |
+| Attacks stopped, each by a named layer | **10 / 10** |
+| Model cost of the whole run | **$0.13** |
+
+These were the attacks:
+- a planted prompt injection
+- a PM asking for a code change
+- a designer editing `server.mjs`
+- path traversal
+- going over budget
+- asking for secrets
+- calling a model that isn't on the key
+- a key trying to mint itself a new key
+- a workspace calling Vertex AI directly
+- a bot PR outside the allow-list
+
+The sample is small, and the checker proves where a citation points, not that the sentence is right.
+
+## Google Cloud services
+
+| Service | Used for |
+|---|---|
+| Gemini 3.8 Flash and 3.1 Pro on Vertex AI | All answers and edits, called only through the gateway |
+| Agent Development Kit (ADK) 2.12 | The Ask and Suggest agents, one per request, with tools chosen by level |
+| Cloud Run | The RoleSpace app (FastAPI) and the LiteLLM model gateway |
+| Cloud SQL (Postgres 16) | Gateway keys, budgets and spend |
+| Firestore | Audit chain, requests, temporary grants, answer log |
+| Secret Manager | Every key and token |
+| Identity-Aware Proxy and an HTTPS load balancer | Google sign-in for the app, and the TCP tunnel to Coder |
+| Compute Engine, VPC and Cloud NAT | The Coder VM in a private subnet with no public IP |
+
+## Repository layout
+
+```
+main.py  agents.py  access.py  roles.py  services.py   the RoleSpace app (FastAPI + ADK)
+role.yaml                                              the policy: levels, people, teams, elevation
+static/                                                the web app (vanilla JS, strict CSP)
+gateway/                                               LiteLLM config and image; provision_keys.py
+coder/                                                 Coder VM setup, workspace image, template, relay
+tests/test_core.py                                     allow-list, explain, citations, audit chain
+eval/                                                  evaluation script and results
+docs/architecture/                                     four high-level design pages (HTML and PNG)
+docs/deck/                                             submission deck (PPTX) and design deck (PDF)
+docs/setup-gcp.md  docs/security.md                    how to deploy it; the security model
+```
+
+## Run it
+
+- **Locally,** with Google application-default credentials and an existing gateway:
+  ```bash
+  pip install -r requirements.txt
+  ./snapshot_repo.sh                 # pins the demo codebase into ./repo
+  python tests/test_core.py
+  uvicorn main:app --port 8080       # then open http://localhost:8080/?as=maya
+  ```
+- **On Google Cloud:** follow [docs/setup-gcp.md](docs/setup-gcp.md) (project, gateway, network, Coder, app, sign-in).
+- **Configuration:** the code uses the authors' project id and URLs as defaults; set `GOOGLE_CLOUD_PROJECT`, `GATEWAY_URL` and `GITHUB_REPO` for your own.
+
+## Built, designed and next
+
+- **Built:** everything above.
+- **Designed, not built:**
+  - levels from Entra ID or Okta groups through SAML and SCIM (the demo's personas stand in for them);
+  - Model Armor in front of the model;
+  - Cloud KMS keys.
+- **Next:**
+  - policy changes through pull requests, with a preview of who gains or loses access;
+  - Ask from Slack and Teams, with requests flowing into Jira or Linear;
+  - cost per outcome;
+  - more teams and repositories, sessions in Firestore, and a scoped admin key.
+
+**Where RoleSpace fits:**
+- Coding assistants license developer seats.
+- AI gateways cap keys.
+- Agent Gateway governs agents.
+
+RoleSpace ties all three to a person's job, with one policy from a PM's question to a developer's workspace, and runs on Google's platform rather than against it.
+
+## License
+
+[MIT](LICENSE). The self-hosted fonts (Inter, JetBrains Mono) are under the SIL Open Font License.

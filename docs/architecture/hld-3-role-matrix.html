@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The role ladder: what each level can do</title>
+  <link rel="stylesheet" href="../design/tokens.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #ffffff;
+      --color-ink:     #111111;
+      --color-muted:   #6b7280;
+      --color-accent:  #3b82f6;
+      --font-sans:     'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-serif:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono:     'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 920px; width: 100%; min-width: 0; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-sans);
+      font-size: 36px;
+      font-weight: 600;
+      letter-spacing: -1px;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.5;
+      color: #374151;
+      max-width: 60rem;
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 920px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">RoleSpace · High-level design · 3 of 4 · Role ladder (as built, from role.yaml)</p>
+    <h1>The role ladder: what each level can do</h1>
+    <p class="subtitle">Each person gets one level in role.yaml. The level decides which tools their agent has (enforced in code), which models and budget their gateway key allows (enforced by the gateway), and whether they get a Coder workspace. Designer edits are limited to public/css/** and public/**/*.html, checked again in CI; every merge needs one human review.</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 920 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="hld-3-role-matrix-title hld-3-role-matrix-desc">
+        <title id="hld-3-role-matrix-title">RoleSpace role permissions</title>
+        <desc id="hld-3-role-matrix-desc">Permission matrix for the four RoleSpace levels: the PM's agent has no write tool, the designer can change only public/css and HTML files through checked pull requests, the developer has a workspace with Gemini CLI, and only the platform admin sets budgets and sees everyone's spend and the audit log.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6b7280"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3b82f6"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#111111"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#ffffff"/>
+
+        <!-- Header row -->
+        <rect x="12" y="72" width="208" height="52" rx="6" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="116" y="96" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Capability</text>
+        <text x="116" y="112" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">vs. role level</text>
+        <rect x="232" y="72" width="148" height="52" rx="12" fill="#f5f5f5"/>
+        <text x="306" y="92" fill="#111111" font-size="12" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Maya · PM</text>
+        <rect x="276" y="98" width="60" height="16" rx="8" fill="#34d399"/>
+        <text x="306" y="110" fill="#111111" font-size="9" font-weight="500" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Ask</text>
+        <rect x="396" y="72" width="148" height="52" rx="12" fill="#f5f5f5"/>
+        <text x="470" y="92" fill="#111111" font-size="12" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Leo · designer</text>
+        <rect x="440" y="98" width="60" height="16" rx="8" fill="#8b5cf6"/>
+        <text x="470" y="110" fill="#111111" font-size="9" font-weight="500" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Suggest</text>
+        <rect x="560" y="72" width="148" height="52" rx="12" fill="#f5f5f5"/>
+        <text x="634" y="92" fill="#111111" font-size="12" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Sam · developer</text>
+        <rect x="604" y="98" width="60" height="16" rx="8" fill="#fb923c"/>
+        <text x="634" y="110" fill="#111111" font-size="9" font-weight="500" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Build</text>
+        <rect x="724" y="72" width="148" height="52" rx="12" fill="#f5f5f5"/>
+        <text x="798" y="92" fill="#111111" font-size="12" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Ava · admin</text>
+        <rect x="768" y="98" width="60" height="16" rx="8" fill="#3b82f6"/>
+        <text x="798" y="110" fill="#111111" font-size="9" font-weight="500" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Govern</text>
+        <!-- Row 0: Read code, docs -->
+        <rect x="12" y="140" width="208" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="24" y="162" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Read code, docs</text>
+        <text x="208" y="162" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end">agent tools</text>
+        <rect x="232" y="140" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="306" y="162" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Read · lines checked</text>
+        <rect x="396" y="140" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="470" y="162" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Read</text>
+        <rect x="560" y="140" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="634" y="162" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Read · own workspace</text>
+        <rect x="724" y="140" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="798" y="162" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Read</text>
+        <!-- Row 1: Edit files -->
+        <rect x="12" y="180" width="208" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="24" y="202" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Edit files</text>
+        <text x="208" y="202" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end">propose_edit</text>
+        <rect x="232" y="180" width="148" height="36" rx="6" fill="#101010"/>
+        <text x="306" y="198" fill="#ffffff" font-size="10" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">No write tool</text>
+        <text x="306" y="210" fill="#a1a1aa" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">enforced in code</text>
+        <rect x="396" y="180" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="470" y="202" fill="#111111" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">public/css, *.html</text>
+        <rect x="560" y="180" width="148" height="36" rx="4" fill="#f5f5f5" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="634" y="202" fill="#111111" font-size="10" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">In own workspace</text>
+        <rect x="724" y="180" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="798" y="202" fill="#898989" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">No write tool</text>
+        <!-- Row 2: Open a PR -->
+        <rect x="12" y="220" width="208" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="24" y="242" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Open a PR</text>
+        <text x="208" y="242" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end">after a preview</text>
+        <rect x="232" y="220" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="306" y="242" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Drafts a request</text>
+        <rect x="396" y="220" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="470" y="242" fill="#111111" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Yes, CI-checked</text>
+        <rect x="560" y="220" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="634" y="242" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Drafts a request</text>
+        <rect x="724" y="220" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="798" y="242" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Drafts a request</text>
+        <!-- Row 3: Merge to main -->
+        <rect x="12" y="260" width="208" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="24" y="282" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Merge to main</text>
+        <text x="208" y="282" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end">branch rules</text>
+        <rect x="232" y="260" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="306" y="282" fill="#898989" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">No</text>
+        <rect x="396" y="260" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="470" y="282" fill="#898989" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">No</text>
+        <rect x="560" y="260" width="148" height="36" rx="4" fill="#f5f5f5" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="634" y="282" fill="#111111" font-size="10" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">1 human review</text>
+        <rect x="724" y="260" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="798" y="282" fill="#898989" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">No</text>
+        <!-- Row 4: Workspace -->
+        <rect x="12" y="300" width="208" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="24" y="322" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Workspace</text>
+        <text x="208" y="322" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end">Coder · IAP</text>
+        <rect x="232" y="300" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="306" y="322" fill="#898989" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Refused</text>
+        <rect x="396" y="300" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="470" y="322" fill="#898989" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Refused</text>
+        <rect x="560" y="300" width="148" height="36" rx="4" fill="#f5f5f5" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="634" y="322" fill="#111111" font-size="10" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Own, via IAP</text>
+        <rect x="724" y="300" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="798" y="322" fill="#898989" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Refused</text>
+        <!-- Row 5: Models on key -->
+        <rect x="12" y="340" width="208" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="24" y="362" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Models on key</text>
+        <text x="208" y="362" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end">gateway</text>
+        <rect x="232" y="340" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="306" y="362" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Flash</text>
+        <rect x="396" y="340" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="470" y="362" fill="#111111" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Flash, Pro</text>
+        <rect x="560" y="340" width="148" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="634" y="362" fill="#111111" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Flash, Pro</text>
+        <rect x="724" y="340" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="798" y="362" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Flash</text>
+        <!-- Row 6: Budget, 30 days -->
+        <rect x="12" y="380" width="208" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="24" y="402" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Budget, 30 days</text>
+        <text x="208" y="402" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end">gateway</text>
+        <rect x="232" y="380" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="306" y="402" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">$2</text>
+        <rect x="396" y="380" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="470" y="402" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">$1</text>
+        <rect x="560" y="380" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="634" y="402" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">$10</text>
+        <rect x="724" y="380" width="148" height="36" rx="4" fill="#f5f5f5" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="798" y="402" fill="#111111" font-size="10" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Sets everyone's</text>
+        <!-- Row 7: Spend, audit -->
+        <rect x="12" y="420" width="208" height="36" rx="4" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.8"/>
+        <text x="24" y="442" fill="#111111" font-size="11" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Spend, audit</text>
+        <text x="208" y="442" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end">Govern</text>
+        <rect x="232" y="420" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="306" y="442" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Own key</text>
+        <rect x="396" y="420" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="470" y="442" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Own key</text>
+        <rect x="560" y="420" width="148" height="36" rx="4" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="634" y="442" fill="#6b7280" font-size="10" font-weight="400" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Own key</text>
+        <rect x="724" y="420" width="148" height="36" rx="4" fill="#f5f5f5" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="798" y="442" fill="#111111" font-size="10" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">All people</text>
+
+        <!-- Legend strip -->
+        <line x1="12" y1="476" x2="872" y2="476" stroke="rgba(17,17,17,0.1)" stroke-width="0.8"/>
+        <text x="12" y="496" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.14em">LEGEND</text>
+        <rect x="92" y="486" width="14" height="12" rx="2" fill="#f5f5f5" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="112" y="496" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">Full control</text>
+        <rect x="232" y="486" width="14" height="12" rx="2" fill="#ffffff" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="252" y="496" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">Can change</text>
+        <rect x="372" y="486" width="14" height="12" rx="2" fill="#f8f9fa" stroke="rgba(17,17,17,0.12)" stroke-width="0.6"/>
+        <text x="392" y="496" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">Read or limited</text>
+        <rect x="512" y="486" width="14" height="12" rx="2" fill="#ffffff" stroke="rgba(17,17,17,0.3)" stroke-width="0.6"/>
+        <text x="532" y="496" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">No access</text>
+        <rect x="652" y="486" width="14" height="12" rx="2" fill="#101010" stroke="#101010" stroke-width="1"/>
+        <text x="672" y="496" fill="#6b7280" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">Core rule</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

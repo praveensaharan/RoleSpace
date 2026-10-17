@@ -1,0 +1,22 @@
+# Public model names are stable aliases; the Gemini IDs behind them change often.
+# Per-person virtual keys decide which of these each role may use.
+model_list:
+  - model_name: gemini-flash          # Ask level, and the default everywhere
+    litellm_params:
+      model: vertex_ai/gemini-3.8-flash
+      vertex_project: os.environ/GOOGLE_CLOUD_PROJECT
+      vertex_location: global
+  - model_name: gemini-pro            # Suggest and Build levels: edits and coding
+    litellm_params:
+      model: vertex_ai/gemini-3.1-pro-preview
+      vertex_project: os.environ/GOOGLE_CLOUD_PROJECT
+      vertex_location: global
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  database_connection_pool_limit: 10   # db-f1-micro allows ~25 connections
+  store_model_in_db: false             # models come from this file only

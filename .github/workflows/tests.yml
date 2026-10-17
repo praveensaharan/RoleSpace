@@ -1,0 +1,14 @@
+# Runs the policy, citation and audit-chain checks on every push. No cloud access needed.
+name: tests
+on: [push, pull_request]
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: ./snapshot_repo.sh          # the demo codebase the citation tests read
+      - run: python tests/test_core.py

@@ -1,0 +1,323 @@
+"""Google Cloud and GitHub plumbing: secrets, the gateway, the audit log, requests, grants,
+answers and pull requests."""
+
+import base64
+import datetime
+import hashlib
+import json
+import os
+import subprocess
+import threading
+import time
+from functools import lru_cache
+
+import httpx
+from google.cloud import firestore, secretmanager
+from google.cloud.firestore_v1.base_query import FieldFilter
+
+PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "project-c399f432-18ea-45d7-b98")
+GATEWAY_URL = os.environ.get("GATEWAY_URL", "https://rs-gateway-894526891132.us-central1.run.app")
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "praveensaharan/firstround-demo")
+
+
+class UpstreamError(Exception):
+    """A dependency (gateway, GitHub) said no or didn't answer. The message is safe to show."""
+
+
+def now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+# --- Secrets ---------------------------------------------------------------------------
+
+@lru_cache
+def _sm() -> secretmanager.SecretManagerServiceClient:
+    return secretmanager.SecretManagerServiceClient()
+
+
+_secrets: dict[str, tuple[float, str]] = {}
+SECRET_TTL = 600  # re-read every 10 minutes, so a rotated token or key is picked up
+
+
+def secret(name: str) -> str:
+    hit = _secrets.get(name)
+    if hit and time.time() - hit[0] < SECRET_TTL:
+        return hit[1]
+    path = f"projects/{PROJECT}/secrets/{name}/versions/latest"
+    value = _sm().access_secret_version(name=path).payload.data.decode().strip()
+    _secrets[name] = (time.time(), value)
+    return value
+
+
+def person_key(pid: str) -> str:
+    """Each person's own gateway key. The app never calls Gemini with anything else."""
+    return secret(f"gw-key-{pid}")
+
+
+# --- Gateway ---------------------------------------------------------------------------
+
+_token = {"value": "", "expires": 0.0}
+_token_lock = threading.Lock()
+
+
+def id_token() -> str:
+    """Google ID token for Cloud Run IAM on the gateway (it has no public invokers)."""
+    with _token_lock:
+        if time.time() > _token["expires"]:
+            if os.environ.get("K_SERVICE"):  # on Cloud Run: the service account
+                import google.auth.transport.requests
+                import google.oauth2.id_token
+                value = google.oauth2.id_token.fetch_id_token(
+                    google.auth.transport.requests.Request(), GATEWAY_URL)
+            else:  # local development: your own gcloud sign-in
+                value = subprocess.run(["gcloud", "auth", "print-identity-token"], check=True,
+                                       capture_output=True, text=True).stdout.strip()
+            _token.update(value=value, expires=time.time() + 45 * 60)
+        return _token["value"]
+
+
+def iam_header() -> dict:
+    # Cloud Run reads IAM from X-Serverless-Authorization, so Authorization stays free for
+    # the LiteLLM key.
+    return {"X-Serverless-Authorization": f"Bearer {id_token()}"}
+
+
+_http = httpx.Client(base_url=GATEWAY_URL, timeout=30)  # pooled connections for admin calls
+
+
+def gateway_admin(path: str, body: dict | None = None) -> dict | list:
+    headers = {"Authorization": f"Bearer {secret('litellm-master-key')}", **iam_header()}
+    try:
+        r = _http.post(path, json=body, headers=headers) if body is not None else _http.get(path, headers=headers)
+    except httpx.HTTPError as e:
+        raise UpstreamError(f"Model gateway didn't answer ({type(e).__name__})") from e
+    if r.status_code >= 400:
+        raise UpstreamError(f"Model gateway refused {path.split('?')[0]}: HTTP {r.status_code} {r.text[:160]}")
+    return r.json()
+
+
+def key_info(alias: str) -> dict:
+    """A person's key as the gateway sees it, found by alias: the key itself never goes in a URL
+    (URLs end up in request logs)."""
+    keys = gateway_admin(f"/key/list?key_alias={alias}&return_full_object=true&size=5").get("keys", [])
+    return next((k for k in keys if isinstance(k, dict) and k.get("key_alias") == alias), {})
+
+
+def key_update(pid: str, **fields) -> None:
+    gateway_admin("/key/update", {"key": person_key(pid), **fields})
+
+
+def key_block(pid: str, blocked: bool) -> None:
+    """The kill switch: a blocked key stops every model call, from the app and from workspaces."""
+    gateway_admin("/key/block" if blocked else "/key/unblock", {"key": person_key(pid)})
+
+
+_health = {"at": 0.0, "value": {}}
+
+
+def health(max_age: float = 20) -> dict:
+    """Is the gateway answering, and is the Coder VM running? Never fails; cached for 20 s."""
+    if time.time() - _health["at"] < max_age:
+        return _health["value"]
+    out = {}
+    try:
+        r = httpx.get(f"{GATEWAY_URL}/health/liveliness", headers=iam_header(), timeout=5)
+        out["gateway"] = "up" if r.status_code == 200 else f"http {r.status_code}"
+    except Exception as e:
+        out["gateway"] = f"down ({type(e).__name__})"
+    try:
+        import google.auth
+        import google.auth.transport.requests
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        session = google.auth.transport.requests.AuthorizedSession(creds)
+        r = session.get(f"https://compute.googleapis.com/compute/v1/projects/{PROJECT}/zones/"
+                        f"us-central1-a/instances/coder-vm?fields=status", timeout=5)
+        out["coder_vm"] = r.json().get("status", f"http {r.status_code}") if r.ok else f"http {r.status_code}"
+    except Exception as e:
+        out["coder_vm"] = f"unknown ({type(e).__name__})"
+    _health.update(at=time.time(), value=out)
+    return out
+
+
+# --- Firestore -------------------------------------------------------------------------
+
+@lru_cache
+def _db() -> firestore.Client:
+    return firestore.Client(project=PROJECT)
+
+
+# Test runs (eval, local checks) set RS_COLLECTION_PREFIX=eval_ so they never touch the live
+# audit chain, inbox or impact numbers.
+PREFIX = os.environ.get("RS_COLLECTION_PREFIX", "")
+
+
+def _col(name: str) -> firestore.CollectionReference:
+    return _db().collection(PREFIX + name)
+
+
+def _iso(value) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value or "")
+
+
+def _docs(collection: str, limit: int, newest_first: bool = True) -> list[dict]:
+    direction = firestore.Query.DESCENDING if newest_first else firestore.Query.ASCENDING
+    q = _col(collection).order_by("ts", direction=direction).limit(limit)
+    return [{**d.to_dict(), "id": d.id} for d in q.stream()]
+
+
+# --- Audit log: append-only, hash-chained ----------------------------------------------
+# Each event stores the hash of the one before it, so a later edit or deletion breaks the
+# chain and verify_chain() says where. One app instance writes, under a lock.
+
+GENESIS = "0" * 64
+_audit_lock = threading.Lock()
+_chain = {"head": None}
+
+
+def _canonical(rec: dict) -> str:
+    return json.dumps(rec, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+
+
+def _event_hash(prev: str, rec: dict) -> str:
+    return hashlib.sha256((prev + _canonical(rec)).encode()).hexdigest()
+
+
+def audit(kind: str, person: str, level: str, detail: str, **extra) -> None:
+    """kind: refused_change | edit_denied | tool_denied | injection_ignored | edit_previewed |
+    pr_opened | budget_changed | access_suspended | access_restored | access_requested |
+    elevation_granted | elevation_denied | elevation_ended | request_updated"""
+    with _audit_lock:
+        if _chain["head"] is None:
+            latest = next((e for e in _docs("audit", 50) if e.get("hash")), None)
+            _chain["head"] = latest["hash"] if latest else GENESIS
+        ts = now()
+        rec = {"ts_iso": ts.isoformat(), "kind": kind, "person": person, "level": level,
+               "detail": detail[:500], **extra}
+        digest = _event_hash(_chain["head"], rec)
+        _col("audit").add({**rec, "ts": ts, "prev_hash": _chain["head"], "hash": digest})
+        _chain["head"] = digest
+
+
+def _public(e: dict) -> dict:
+    return {**e, "ts": _iso(e.get("ts"))}
+
+
+def recent_audit(limit: int = 60) -> list[dict]:
+    return [_public(e) for e in _docs("audit", limit)]
+
+
+def verify_chain(events_oldest_first: list[dict]) -> dict:
+    """Recompute every hash. Events from before the chain existed are counted, not checked."""
+    prev, checked, legacy = None, 0, 0
+    for e in events_oldest_first:
+        if not e.get("hash"):
+            legacy += 1
+            continue
+        rec = {k: v for k, v in e.items() if k not in ("ts", "hash", "prev_hash", "id")}
+        if prev is not None and e.get("prev_hash") != prev:
+            return {"ok": False, "checked": checked, "legacy": legacy, "event": e["id"],
+                    "reason": "an event before this one was removed or reordered"}
+        if _event_hash(e.get("prev_hash", ""), rec) != e["hash"]:
+            return {"ok": False, "checked": checked, "legacy": legacy, "event": e["id"],
+                    "reason": "this event was changed after it was written"}
+        prev, checked = e["hash"], checked + 1
+    return {"ok": True, "checked": checked, "legacy": legacy, "head": prev}
+
+
+def audit_history(limit: int = 2000) -> tuple[list[dict], dict]:
+    """The latest `limit` audit events, oldest first, and whether their hash chain is intact."""
+    events = _docs("audit", limit)[::-1]
+    return [_public(e) for e in events], verify_chain(events)
+
+
+# --- Requests: refusals become tracked handoffs; access requests wait for approval -------
+
+def save_request(person: str, team: str, title: str, details: str, kind: str = "change", **extra) -> str:
+    ref = _col("requests").document()
+    ref.set({"ts": now(), "from": person, "team": team, "type": kind, "title": title[:200],
+             "details": details[:2000], "status": "open" if kind == "change" else "pending",
+             "history": [], **extra})
+    return ref.id
+
+
+def _request_out(r: dict) -> dict:
+    status = "open" if r.get("status") == "drafted" else r.get("status")  # drafts from before the inbox
+    return {**r, "ts": _iso(r.get("ts")), "updated": _iso(r.get("updated")),
+            "type": r.get("type", "change"), "status": status}
+
+
+def list_requests(limit: int = 200) -> list[dict]:
+    return [_request_out(r) for r in _docs("requests", limit)]
+
+
+def get_request(rid: str) -> dict | None:
+    d = _col("requests").document(rid).get()
+    return _request_out({**d.to_dict(), "id": d.id}) if d.exists else None
+
+
+def update_request(rid: str, status: str, by: str, note: str = "", **extra) -> None:
+    _col("requests").document(rid).update({
+        "status": status, "updated": now(), **extra,
+        "history": firestore.ArrayUnion([{"ts": now().isoformat(), "by": by, "status": status,
+                                          "note": note[:300]}])})
+
+
+# --- Temporary elevations --------------------------------------------------------------
+
+def save_grant(grant: dict) -> str:
+    ref = _col("grants").document()
+    ref.set({**grant, "ts": now()})
+    return ref.id
+
+
+def active_grants() -> list[dict]:
+    q = _col("grants").where(filter=FieldFilter("status", "==", "active"))
+    return [{**d.to_dict(), "id": d.id} for d in q.stream()]
+
+
+def set_grant_status(gid: str, status: str) -> None:
+    _col("grants").document(gid).update({"status": status})
+
+
+def end_grant(gid: str, status: str, by: str) -> None:
+    _col("grants").document(gid).update({"status": status, "ended_by": by, "ended": now()})
+
+
+# --- Answers (for the impact numbers) ---------------------------------------------------
+
+def log_answer(rec: dict) -> None:
+    _col("answers").add({"ts": now(), **rec})
+
+
+def answers(limit: int = 500) -> list[dict]:
+    return [{**a, "ts": _iso(a.get("ts"))} for a in _docs("answers", limit)]
+
+
+# --- GitHub pull requests (fine-grained token for firstround-demo only) -----------------
+
+def _gh(method: str, path: str, **kw) -> dict:
+    headers = {"Authorization": f"Bearer {secret('github-token')}",
+               "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    try:
+        r = httpx.request(method, f"https://api.github.com/repos/{GITHUB_REPO}{path}",
+                          headers=headers, timeout=30, **kw)
+    except httpx.HTTPError as e:
+        raise UpstreamError(f"GitHub didn't answer ({type(e).__name__})") from e
+    if r.status_code >= 400:
+        raise UpstreamError(f"GitHub {method} {path.split('?')[0]}: {r.status_code} {r.text[:160]}")
+    return r.json()
+
+
+def open_pr(branch: str, path: str, old_text: str, new_text: str, title: str, body: str) -> str:
+    """Branch from main, apply one exact text replacement to one file, open a PR. Returns its URL."""
+    main_sha = _gh("GET", "/git/ref/heads/main")["object"]["sha"]
+    current = _gh("GET", f"/contents/{path}", params={"ref": "main"})
+    text = base64.b64decode(current["content"]).decode()
+    if text.count(old_text) != 1:
+        raise UpstreamError(f"{path} changed on GitHub since the preview; ask again for a fresh edit")
+    _gh("POST", "/git/refs", json={"ref": f"refs/heads/{branch}", "sha": main_sha})
+    _gh("PUT", f"/contents/{path}", json={
+        "message": title, "branch": branch, "sha": current["sha"],
+        "content": base64.b64encode(text.replace(old_text, new_text).encode()).decode()})
+    return _gh("POST", "/pulls", json={"title": title, "head": branch, "base": "main",
+                                        "body": body})["html_url"]

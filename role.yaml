@@ -1,0 +1,73 @@
+# Who gets which level of AI. Everyone here is made up: the FirstRound team.
+# RoleSpace reads this file. The model gateway enforces each level's models and budget on the
+# person's own key; RoleSpace code enforces tools and paths. Run gateway/provision_keys.py
+# (and coder/sync_build_keys.sh for Build) after editing.
+
+company: FirstRound
+repo: praveensaharan/firstround-demo
+
+levels:
+  ask:      # PM: questions about the code, answers with checked citations, no writes
+    models: [gemini-flash]
+    budget_usd: 2.00
+    agent_model: gemini-flash
+    tools: [list_files, search_code, read_file, draft_request]
+  suggest:  # designer: small edits inside the allow-list, as a PR a human merges
+    models: [gemini-flash, gemini-pro]
+    budget_usd: 1.00
+    agent_model: gemini-flash
+    tools: [list_files, search_code, read_file, draft_request, propose_edit]
+    allow_paths: ["public/css/**", "public/**/*.html"]
+    deny_paths: ["lib/**", "server.mjs"]   # listed for clarity; anything not allowed is denied
+  build:    # developer: Coder workspace with Gemini CLI
+    models: [gemini-flash, gemini-pro]
+    budget_usd: 10.00
+    tools: [list_files, search_code, read_file, draft_request]
+  govern:   # platform admin: roles, budgets, spend, audit
+    models: [gemini-flash]
+    budget_usd: 1.00
+    tools: [list_files, search_code, read_file, draft_request]
+
+budget_period: 30d
+
+# Who owns which code: requests drafted at Ask or Suggest level go to the owner's inbox.
+teams:
+  screening: {owner: sam}
+  platform:  {owner: ava}
+
+# Just-in-time elevation: a person may ask to hold a higher level for a few hours.
+# A Govern-level person approves; the gateway key changes for that time and changes back.
+elevation:
+  allow:
+    ask: [suggest]
+  max_hours: 8
+
+# For the impact estimate on Govern > Overview (an assumption, shown as one).
+roi:
+  minutes_per_question: 15
+
+people:
+  - id: maya
+    name: Maya Chen
+    email: maya@firstround.example
+    title: Product manager
+    team: screening
+    level: ask
+  - id: leo
+    name: Leo Park
+    email: leo@firstround.example
+    title: Product designer
+    team: screening
+    level: suggest
+  - id: sam
+    name: Sam Okafor
+    email: sam@firstround.example
+    title: Developer
+    team: screening
+    level: build
+  - id: ava
+    name: Ava Rossi
+    email: ava@firstround.example
+    title: Platform admin
+    team: platform
+    level: govern

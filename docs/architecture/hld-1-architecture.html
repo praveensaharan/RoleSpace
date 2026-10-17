@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Every model call goes through one gateway</title>
+  <link rel="stylesheet" href="../design/tokens.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #ffffff;
+      --color-ink:     #111111;
+      --color-muted:   #6b7280;
+      --color-accent:  #3b82f6;
+      --font-sans:     'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-serif:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono:     'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1280px; width: 100%; min-width: 0; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-sans);
+      font-size: 36px;
+      font-weight: 600;
+      letter-spacing: -1px;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.5;
+      color: #374151;
+      max-width: 60rem;
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">RoleSpace · High-level design · 1 of 4 · Architecture (as built, 17 Oct 2026)</p>
+    <h1>Every model call goes through one gateway</h1>
+    <p class="subtitle">What runs today on Google Cloud. The RoleSpace app and the LiteLLM model gateway run on Cloud Run; Coder workspaces run on a VM in a private subnet with no public IP, reached only through an IAP tunnel. People sign in with Google through IAP on an HTTPS load balancer. Only the gateway's service account may call Gemini, and every call is charged to the person's own key. The demo codebase is praveensaharan/firstround-demo. Dashed parts are designed but not built: Entra ID sync, Model Armor and Cloud KMS.</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="hld-1-architecture-title hld-1-architecture-desc">
+        <title id="hld-1-architecture-title">RoleSpace architecture on Google Cloud, as built</title>
+        <desc id="hld-1-architecture-desc">People sign in with Google through IAP on an HTTPS load balancer to reach the RoleSpace app on Cloud Run and, at the Build level, Coder workspaces in a private subnet through an IAP tunnel; both reach Gemini only through a LiteLLM gateway on Cloud Run with each person's key, which records keys and spend in Cloud SQL; the app writes an audit log to Firestore and opens pull requests on firstround-demo; a workspace calling Gemini directly is refused with 403.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6b7280"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3b82f6"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#111111"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#ffffff"/>
+
+        <!-- Zone: GOOGLE CLOUD PROJECT · US-CENTRAL1 -->
+        <rect x="232" y="40" width="768" height="560" rx="12" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="248" y="44" width="220" height="12" rx="2" fill="#f8f9fa"/>
+        <text x="358" y="53" fill="#898989" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">GOOGLE CLOUD PROJECT · US-CENTRAL1</text>
+        <!-- Zone: CLOUD RUN -->
+        <rect x="456" y="88" width="528" height="136" rx="12" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="472" y="92" width="68" height="12" rx="2" fill="#f8f9fa"/>
+        <text x="506" y="101" fill="#898989" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">CLOUD RUN</text>
+        <!-- Zone: VPC · PRIVATE SUBNET · NO PUBLIC IP -->
+        <rect x="456" y="424" width="232" height="136" rx="12" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="472" y="428" width="228" height="12" rx="2" fill="#f8f9fa"/>
+        <text x="586" y="437" fill="#898989" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">VPC · PRIVATE SUBNET · NO PUBLIC IP</text>
+        <!-- Zone: GITHUB -->
+        <rect x="1040" y="88" width="216" height="136" rx="12" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="1056" y="92" width="52" height="12" rx="2" fill="#f8f9fa"/>
+        <text x="1082" y="101" fill="#898989" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">GITHUB</text>
+        <!-- Arrows first (behind nodes) -->
+        <path d="M 120,296 V 168 Q 120,160 128,160 H 248" fill="none" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="408" y1="152" x2="472" y2="152" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 120,376 V 488 Q 120,496 128,496 H 248" fill="none" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="408" y1="496" x2="472" y2="496" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="652" y1="148" x2="744" y2="148" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 672,476 H 720 Q 728,476 728,468 V 192 Q 728,184 736,184 H 744" fill="none" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="780" y1="200" x2="780" y2="456" stroke="#111111" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <line x1="562" y1="200" x2="562" y2="272" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="904" y1="200" x2="904" y2="272" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 600,120 V 80 Q 600,72 608,72 H 1140 Q 1148,72 1148,80 V 120" fill="none" stroke="#3b82f6" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <line x1="672" y1="516" x2="736" y2="516" stroke="#111111" stroke-width="1.2" stroke-dasharray="4,3"/>
+        <line x1="738" y1="510" x2="738" y2="522" stroke="#111111" stroke-width="2"/>
+
+        <!-- Arrow labels -->
+        <rect x="150" y="138" width="68" height="16" rx="2" fill="#ffffff"/>
+        <text x="184" y="150" fill="#898989" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">SIGN-IN</text>
+        <rect x="138" y="504" width="92" height="16" rx="2" fill="#ffffff"/>
+        <text x="184" y="516" fill="#898989" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">BUILD ONLY</text>
+        <rect x="414" y="504" width="52" height="16" rx="2" fill="#ffffff"/>
+        <text x="440" y="516" fill="#898989" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">:3000</text>
+        <rect x="664" y="126" width="68" height="16" rx="2" fill="#ffffff"/>
+        <text x="698" y="138" fill="#898989" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">OWN KEY</text>
+        <rect x="652" y="392" width="68" height="16" rx="2" fill="#ffffff"/>
+        <text x="686" y="404" fill="#898989" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">OWN KEY</text>
+        <rect x="788" y="400" width="84" height="16" rx="2" fill="#ffffff"/>
+        <text x="830" y="412" fill="#111111" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">ONLY PATH</text>
+        <rect x="570" y="232" width="52" height="16" rx="2" fill="#ffffff"/>
+        <text x="596" y="244" fill="#898989" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">AUDIT</text>
+        <rect x="912" y="232" width="52" height="16" rx="2" fill="#ffffff"/>
+        <text x="938" y="244" fill="#898989" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">SPEND</text>
+        <rect x="780" y="50" width="188" height="16" rx="2" fill="#ffffff"/>
+        <text x="874" y="62" fill="#3b82f6" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">PULL REQUEST · SUGGEST</text>
+        <rect x="678" y="524" width="52" height="16" rx="2" fill="#ffffff"/>
+        <text x="704" y="536" fill="#111111" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">× 403</text>
+
+        <!-- Designed, not built -->
+        <rect x="248" y="560" width="736" height="28" rx="4" fill="transparent" stroke="#898989" stroke-width="1.2" stroke-dasharray="6,4"/>
+        <text x="616" y="578" fill="#898989" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">DESIGNED, NOT BUILT · Entra ID group sync (SAML, SCIM) · Model Armor · Cloud KMS keys</text>
+
+        <!-- Callout -->
+        <text x="1040" y="476" fill="#111111" font-size="16" font-weight="600" letter-spacing="-0.3" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Only the gateway's service</text>
+        <text x="1040" y="496" fill="#111111" font-size="16" font-weight="600" letter-spacing="-0.3" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">account may call Gemini.</text>
+        <path d="M 1036 486 Q 1000 488 948 494" fill="none" stroke="rgba(17,17,17,0.4)" stroke-width="1" stroke-dasharray="4,3"/>
+        <!-- Node: People, by level -->
+        <rect x="40" y="296" width="160" height="80" rx="6" fill="#ffffff"/>
+        <rect x="40" y="296" width="160" height="80" rx="6" fill="#f5f5f5" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="48" y="304" width="36" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="66" y="313" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">USER</text>
+        <text x="120" y="340" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">People, by level</text>
+        <text x="120" y="360" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Ask · Suggest · Build</text>
+        <!-- Node: Google sign-in -->
+        <rect x="248" y="120" width="160" height="80" rx="6" fill="#ffffff"/>
+        <rect x="248" y="120" width="160" height="80" rx="6" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="256" y="128" width="56" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="284" y="137" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">IAP · LB</text>
+        <text x="328" y="164" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">Google sign-in</text>
+        <text x="328" y="184" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">HTTPS load balancer</text>
+        <!-- Node: IAP tunnel -->
+        <rect x="248" y="456" width="160" height="80" rx="6" fill="#ffffff"/>
+        <rect x="248" y="456" width="160" height="80" rx="6" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="256" y="464" width="28" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="270" y="473" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">IAP</text>
+        <text x="328" y="500" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">IAP tunnel</text>
+        <text x="328" y="520" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">to Coder · no VPN</text>
+        <!-- Node: RoleSpace app -->
+        <rect x="472" y="120" width="180" height="80" rx="6" fill="#ffffff"/>
+        <rect x="472" y="120" width="180" height="80" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+        <rect x="480" y="128" width="28" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="494" y="137" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">APP</text>
+        <text x="562" y="164" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">RoleSpace app</text>
+        <text x="562" y="184" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Ask · Suggest · Govern</text>
+        <!-- Node: Model gateway -->
+        <rect x="744" y="120" width="200" height="80" rx="6" fill="#ffffff"/>
+        <rect x="744" y="120" width="200" height="80" rx="6" fill="#101010" stroke="#101010" stroke-width="1"/>
+        <rect x="752" y="128" width="36" height="12" rx="2" fill="transparent" stroke="rgba(255,255,255,0.30)" stroke-width="0.8"/>
+        <text x="770" y="137" fill="#a1a1aa" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">GATE</text>
+        <text x="844" y="164" fill="#ffffff" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">Model gateway</text>
+        <text x="844" y="184" fill="#a1a1aa" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">LiteLLM · keys · budget</text>
+        <!-- Node: Audit log -->
+        <rect x="472" y="272" width="180" height="80" rx="6" fill="#ffffff"/>
+        <rect x="472" y="272" width="180" height="80" rx="6" fill="#f5f5f5" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="480" y="280" width="64" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="512" y="289" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">FIRESTORE</text>
+        <text x="562" y="316" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">Audit log</text>
+        <text x="562" y="336" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">hash-chained</text>
+        <!-- Node: Keys and spend -->
+        <rect x="824" y="272" width="160" height="80" rx="6" fill="#ffffff"/>
+        <rect x="824" y="272" width="160" height="80" rx="6" fill="#f5f5f5" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="832" y="280" width="64" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="864" y="289" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">CLOUD SQL</text>
+        <text x="904" y="316" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">Keys and spend</text>
+        <text x="904" y="336" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">rs-sql · Postgres</text>
+        <!-- Node: Coder workspaces -->
+        <rect x="472" y="456" width="200" height="80" rx="6" fill="#ffffff"/>
+        <rect x="472" y="456" width="200" height="80" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+        <rect x="480" y="464" width="24" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="492" y="473" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">VM</text>
+        <text x="572" y="500" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">Coder workspaces</text>
+        <text x="572" y="520" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Gemini CLI · VS Code</text>
+        <!-- Node: Gemini -->
+        <rect x="744" y="456" width="200" height="80" rx="6" fill="#ffffff"/>
+        <rect x="744" y="456" width="200" height="80" rx="6" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="752" y="464" width="64" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="784" y="473" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">VERTEX AI</text>
+        <text x="844" y="500" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">Gemini</text>
+        <text x="844" y="520" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Flash · Pro</text>
+        <!-- Node: firstround-demo -->
+        <rect x="1064" y="120" width="168" height="80" rx="6" fill="#ffffff"/>
+        <rect x="1064" y="120" width="168" height="80" rx="6" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <rect x="1072" y="128" width="36" height="12" rx="2" fill="transparent" stroke="#d1d5db" stroke-width="0.8"/>
+        <text x="1090" y="137" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">REPO</text>
+        <text x="1148" y="164" fill="#111111" font-size="16" font-weight="600" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" letter-spacing="-0.3">firstround-demo</text>
+        <text x="1148" y="184" fill="#6b7280" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">CI check · 1 review</text>
+
+        <!-- Legend strip -->
+        <line x1="40" y1="624" x2="1240" y2="624" stroke="rgba(17,17,17,0.1)" stroke-width="0.8"/>
+        <text x="40" y="644" fill="#6b7280" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+        <rect x="40" y="658" width="16" height="12" rx="2" fill="#101010" stroke="#101010" stroke-width="1"/>
+        <text x="64" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Gateway</text>
+        <rect x="128" y="658" width="16" height="12" rx="2" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+        <text x="152" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Service</text>
+        <rect x="216" y="658" width="16" height="12" rx="2" fill="#f5f5f5" stroke="#e5e7eb" stroke-width="1"/>
+        <text x="240" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Record</text>
+        <rect x="300" y="658" width="16" height="12" rx="2" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+        <text x="324" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Managed</text>
+        <rect x="388" y="658" width="16" height="12" rx="2" fill="#f5f5f5" stroke="#e5e7eb" stroke-width="1"/>
+        <text x="412" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Person</text>
+        <rect x="472" y="658" width="16" height="12" rx="2" fill="transparent" stroke="#898989" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="496" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Designed only</text>
+        <line x1="596" y1="664" x2="624" y2="664" stroke="#3b82f6" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="636" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Change as PR</text>
+        <line x1="728" y1="664" x2="756" y2="664" stroke="#111111" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="768" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Model call</text>
+        <line x1="848" y1="664" x2="876" y2="664" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="888" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Call</text>
+        <line x1="936" y1="664" x2="964" y2="664" stroke="#898989" stroke-width="1.2" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+        <text x="976" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Designed</text>
+        <line x1="1048" y1="664" x2="1076" y2="664" stroke="#111111" stroke-width="1.2" stroke-dasharray="4,3"/>
+        <line x1="1078" y1="658" x2="1078" y2="670" stroke="#111111" stroke-width="2"/>
+        <text x="1088" y="668" fill="#6b7280" font-size="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif">Blocked</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>
