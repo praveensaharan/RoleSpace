@@ -108,6 +108,16 @@ def index() -> FileResponse:
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/privacy")
+def privacy() -> FileResponse:
+    return FileResponse(STATIC / "privacy.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/terms")
+def terms() -> FileResponse:
+    return FileResponse(STATIC / "terms.html", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/favicon.svg")
 def favicon() -> FileResponse:
     return FileResponse(STATIC / "favicon.svg")

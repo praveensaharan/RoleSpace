@@ -171,7 +171,7 @@ $$("[data-count]").forEach((el) => whenVisible(el, () => countUp(el), 0.5));
       await sleep(300);
       add(`<div class="f"><span>public/css/app.css</span><span>line 42</span></div><div class="del">-  background: #2563eb;</div><div class="add">+  background: #ff6b35;</div>`, "diff msg show");
       await sleep(900);
-      add(`${icon("pr")}<span>Pull request #42 opened in Leo's name. No GitHub account needed</span>`, "status-line");
+      add(`${icon("pr")}<span>Pull request #42 opened under policy, in Leo's name</span>`, "status-line");
       await sleep(700);
       add(`${icon("check")}<span>CI allow-list check passed · waiting for Sam's review</span>`, "status-line");
     },
@@ -586,7 +586,7 @@ $$("[data-count]").forEach((el) => whenVisible(el, () => countUp(el), 0.5));
       ui: `<div class="msg me show">Make the Begin interview button our brand orange, #FF6B35.</div><div class="msg ai show">That's in public/css/app.css, inside your allow-list. Here's the change.</div>` },
     { h: "He reviews the exact change", p: "A diff shows exactly what changes. Nothing reaches GitHub until Leo chooses to open a pull request.",
       ui: `<div class="diff"><div class="f"><span>public/css/app.css</span><span>1 line</span></div><div class="del">-  background: #2563eb;</div><div class="add">+  background: #ff6b35;</div></div><div class="cta-row"><span class="btn primary">${icon("pr")}Open pull request</span><span class="btn secondary">Discard</span></div>` },
-    { h: "A pull request in his name", p: "RoleSpace opens a normal pull request. The commit is Leo's: he reviewed it, so the credit is his. He needs no GitHub account.",
+    { h: "A pull request in his name", p: "RoleSpace opens the pull request under policy, in Leo's name: he reviewed the change, so the credit is his. CI and a human review decide what merges.",
       ui: `<div class="pr"><div class="t">${icon("pr")}Make the Begin interview button brand orange <span class="state open">Open</span></div><div class="meta">#42 · rolespace/suggest-leo → main</div><div class="commit"><b>Leo Park</b> &lt;leo@firstround.example&gt; authored and committed</div></div>` },
     { h: "Checked, then reviewed", p: "CI checks the allow-list again and branch protection needs one human review. Code owners review in GitHub as they always do.",
       ui: `<div class="pr"><div class="t">${icon("pr")}#42 Make the Begin interview button brand orange</div><div class="row ok">${icon("check")}designer-allowlist check passed</div><div class="row ok">${icon("check")}Sam Okafor approved these changes</div><div class="row wait">${icon("gauge")}1 of 1 required review</div></div>` },

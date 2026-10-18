@@ -459,8 +459,8 @@ def open_pr(branch: str, path: str, old_text: str, new_text: str, title: str, bo
             author: tuple[str, str] | None = None) -> str:
     """Branch from main, apply one exact text replacement to one file, open a PR. Returns its URL.
 
-    The bot opens it, so the person needs no GitHub account. The person reviewed the change and
-    chose to open it, so the commit is theirs: `author` (name, email) is its author and committer."""
+    RoleSpace's GitHub identity opens it, under policy. The person reviewed the change and chose
+    to open it, so the commit is theirs: `author` (name, email) is its author and committer."""
     main_sha = _gh("GET", "/git/ref/heads/main")["object"]["sha"]
     current = _gh("GET", f"/contents/{path}", params={"ref": "main"})
     text = base64.b64decode(current["content"]).decode()
@@ -480,7 +480,7 @@ _pr_cache: dict[int, tuple[float, dict]] = {}
 
 
 def pr_status(number: int) -> dict:
-    """Where a pull request stands, for people who have no GitHub account (cached for 30 s)."""
+    """Where a pull request stands, as RoleSpace shows it to the person (cached for 30 s)."""
     hit = _pr_cache.get(number)
     if hit and time.time() - hit[0] < 30:
         return hit[1]

@@ -921,7 +921,7 @@ function currentProject(p) {
   return (p.projects || []).includes(pick) ? pick : (p.projects || [])[0];
 }
 
-// ---- Issues & pull requests, live from GitHub (nobody needs a GitHub account) --------------
+// ---- Issues & pull requests, live from GitHub ----------------------------------------------
 
 const GH_STATE = { open: ["ok", "Open"], merged: ["merged", "Merged"], closed: ["", "Closed"], draft: ["", "Draft"] };
 
@@ -929,7 +929,7 @@ async function renderGitHub(page, id) {
   const p = me(), proj = currentProject(p);
   page.innerHTML = `<div class="page-head"><div class="t"><h1>Issues & pull requests</h1>
       <p>Live from GitHub for the repositories you can access. Pull requests opened from RoleSpace are marked, so
-        people without a GitHub account can follow their changes to merge.</p></div>
+        everyone can follow a change through review to merge.</p></div>
       <div class="actions">${(p.projects || []).length > 1 ? `<select class="input" id="gh-project" aria-label="Repository">${p.projects.map((k) =>
         `<option value="${esc(k)}" ${k === proj ? "selected" : ""}>${esc(projectName(k))}</option>`).join("")}</select>` : ""}
         <a class="btn" href="https://github.com/${esc(projectRepo(proj))}" target="_blank" rel="noopener">${icon("external")} Open on GitHub</a></div></div>
@@ -946,7 +946,7 @@ async function renderGitHub(page, id) {
       ${kpi("Open issues", d.issues.length, `in ${esc(d.repo)}`, "inbox")}
       ${kpi("Open pull requests", open.length, `${d.pulls.length} recent in all`, "pr")}
       ${kpi("Merged", d.pulls.filter((x) => x.state === "merged").length, "of the recent pull requests", "check")}
-      ${kpi("From RoleSpace", ours.length, "opened for people without GitHub", "zap")}</div>
+      ${kpi("From RoleSpace", ours.length, "opened under policy, reviewed on GitHub", "zap")}</div>
     <div class="g2" style="margin-top:16px">
       <section class="panel"><div class="panel-head"><h2>Pull requests <span class="sub">newest activity first</span></h2></div>
         <div class="panel-body flush">${d.pulls.length ? `<ul class="gh-list">${d.pulls.map((x) => `<li>
@@ -1028,7 +1028,7 @@ async function showHistory() {
   });
 }
 
-// ---- Changes: pull requests opened for people without GitHub accounts ----------------------
+// ---- Changes: pull requests RoleSpace opened, under policy ---------------------------------
 
 const PR_STATE = { open: ["info", "Open"], merged: ["ok", "Merged"], closed: ["", "Closed"] };
 const CHECKS = { passing: ["ok", "Checks passing"], failing: ["bad", "Checks failing"], pending: ["warn", "Checks running"], none: ["", "No checks"] };
@@ -1036,8 +1036,8 @@ const CHECKS = { passing: ["ok", "Checks passing"], failing: ["bad", "Checks fai
 async function renderChanges(page, id) {
   const p = me();
   page.innerHTML = `<div class="page-head"><div class="t"><h1>Changes</h1>
-    <p>${isGov(p) ? "Every pull request RoleSpace opened for someone." : "Your pull requests."} Nobody needs a GitHub account: RoleSpace
-      opens each one for them, the commit is in their name, and the CI check and a human review still decide what merges.</p></div>
+    <p>${isGov(p) ? "Every pull request RoleSpace opened for someone." : "Your pull requests."} RoleSpace opens each one
+      under policy, the commit is in the person's name, and the CI check and a human review still decide what merges.</p></div>
     <div class="actions"><button class="btn" data-action="refresh">${icon("refresh")} Refresh</button></div></div>
     <section class="panel"><div class="panel-body flush" id="changes"><div class="panel-body"><div class="skeleton"></div></div></div></section>`;
   let d;
