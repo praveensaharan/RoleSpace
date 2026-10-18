@@ -10,7 +10,7 @@ Built on Google Cloud: Gemini on Vertex AI, the Agent Development Kit, Cloud Run
 |---|---|
 | Website | https://rolespace.duckdns.org (public, interactive product tour; "Log in to your organization" leads to the app) |
 | Live app | https://rolespace.duckdns.org/rolespace-ent/ (sign in with Google, then pick a persona) |
-| Demo video (3 min) | https://www.youtube.com/watch?v=cTBwacNvkZc |
+| Demo video (3 min) | [https://www.youtube.com/watch?v=cTBwacNvkZc](https://www.youtube.com/watch?v=tKJVyJk11OU) |
 
 ![How RoleSpace works](docs/architecture/flow-1-env-usage.png)
 
