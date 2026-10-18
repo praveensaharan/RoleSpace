@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(date -u +%H:%M; gcloud run revisions list --service rolespace --region us-central1 --project project-c399f432-18ea-45d7-b98 --limit 3 --format='table\\(metadata.name,metadata.creationTimestamp\\)' 2>&1 | head -5; ls -la --time-style=+%H:%M ~/brainstrom/deck/submission/build_flow_diagrams.py ~/brainstrom/deck/submission/*flow-5* 2>&1 | head; grep -n 'without accounts' ~/brainstrom/deck/submission/build_flow_diagrams.py 2>&1 | head -3)",
+      "Read(//home/g200040109_iitb/brainstrom/deck/submission/**)"
+    ]
+  }
+}
