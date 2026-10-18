@@ -10,7 +10,7 @@ Built for the **AI Builder Cup 2026** (theme: *Future of Work & Enterprise Produ
 |---|---|
 | Website | https://rolespace.duckdns.org (public, interactive product tour; "Log in to your organization" leads to the app) |
 | Live app | https://rolespace.duckdns.org/rolespace-ent/ (sign in with Google, then pick a persona) |
-| Demo video (3 min) | *add the link* |
+| Demo video (3 min) | https://www.youtube.com/watch?v=cTBwacNvkZc |
 | Submission deck | [PDF](docs/deck/RoleSpace-AI-Builder-Cup-submission.pdf) · [PPTX](docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx) · [design deck (PDF)](docs/deck/RoleSpace-deck.pdf) |
 
 ![How RoleSpace works](docs/architecture/flow-1-env-usage.png)

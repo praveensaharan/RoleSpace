@@ -390,9 +390,9 @@ def open_pr(body: PrIn, request: Request) -> dict:
         # A fresh branch per attempt: a retry after a half-finished attempt doesn't hit "exists".
         branch = f"rolespace/suggest-{p['id']}-{edit['id']}-{int(time.time()) % 100000}"
         title = edit["reason"][:80]
-        body_md = (f"Change by **{p['name']}** ({p['title']}), who reviewed it before opening this pull "
-                   f"request. They have no GitHub account, so it was opened for them; they follow its "
-                   f"checks, review and comments in RoleSpace.\n\n"
+        body_md = (f"Change by **{p['name']}** ({p['title']}), who reviewed it before RoleSpace opened this pull "
+                   f"request under policy, in their name. CI and one human review decide what merges; they "
+                   f"follow its checks and comments in RoleSpace.\n\n"
                    f"> {edit['reason']}\n\nOnly `{edit['path']}` changes. The `designer-allowlist` check and one "
                    f"human review are required before merge.\n\nPolicy version `{roles.version()}`.")
         url = services.open_pr(branch, edit["path"], edit["old_text"], edit["new_text"], title, body_md,
@@ -744,7 +744,7 @@ def suspend(body: SuspendIn) -> dict:
     return {"ok": True, "suspended": body.suspended}
 
 
-# --- GitHub: a repository's issues and pull requests, for people without GitHub accounts ---
+# --- GitHub: a repository's issues and pull requests, followed from RoleSpace ----------------
 
 _gh_activity: dict[str, tuple[float, dict]] = {}
 
@@ -752,7 +752,7 @@ _gh_activity: dict[str, tuple[float, dict]] = {}
 @app.get("/api/github")
 def github_activity(person: str, project: str) -> dict:
     """Open issues and recent pull requests of a repository this person can access, live from
-    GitHub (cached for a minute). Read-only: nobody needs a GitHub account to follow the work."""
+    GitHub (cached for a minute). Read-only."""
     p = _person(person)
     if project not in roles.person_projects(p):
         raise HTTPException(403, f"{p['name']} has no access to {project}")
@@ -1038,7 +1038,7 @@ def evidence(person: str, format: Literal["json", "csv"] = "json") -> Response:
         "Content-Disposition": f'attachment; filename="rolespace-evidence-{stamp}.{ext}"'})
 
 
-# --- Changes: pull requests opened through RoleSpace, for people without GitHub accounts ----
+# --- Changes: pull requests opened through RoleSpace, under policy --------------------------
 
 @app.get("/api/changes")
 def changes(person: str) -> dict:

@@ -120,7 +120,7 @@
       <div class="big reveal"><b data-count="92" data-suffix="/92">0</b><p>RoleSpace citations verified against the lines the assistant read.<sup>3</sup></p></div>
       <div class="big reveal"><b data-count="1" data-prefix="≈" data-suffix="¢">0</b><p>model cost per answered question, measured on RoleSpace.<sup>3</sup></p></div>
     </div>
-    <p class="fine sources"><sup>1</sup> <a href="https://survey.stackoverflow.co/2024/professional-developers" rel="noopener" target="_blank">Stack Overflow Developer Survey 2024</a> · <sup>2</sup> <a href="https://github.blog/news-insights/research/research-quantifying-github-copilots-impact-on-developer-productivity-and-happiness/" rel="noopener" target="_blank">GitHub research, 95 developers, one task</a> · <sup>3</sup> RoleSpace evaluation on the running product, 17 Oct 2026: 10/10 questions, 10/10 attacks stopped, 12 s median answer</p>
+    <p class="fine sources"><sup>1</sup> <a href="https://survey.stackoverflow.co/2024/professional-developers" rel="noopener" target="_blank">Stack Overflow Developer Survey 2024</a> · <sup>2</sup> <a href="https://github.blog/news-insights/research/research-quantifying-github-copilots-impact-on-developer-productivity-and-happiness/" rel="noopener" target="_blank">GitHub research, 95 developers, one task</a> · <sup>3</sup> RoleSpace evaluation on the running product, 17 Oct 2026: 10/10 questions, 10/10 attacks stopped, 12 s median answer · <sup>4</sup> The Information and TechCrunch, 2026 · <sup>5</sup> Cortex, State of Developer Productivity 2024 (50 engineering leaders at companies over 500 people)</p>
   </div>
 </section>
 
@@ -208,8 +208,8 @@
   <div class="wrap">
     <div class="head reveal">
       <span class="eyebrow">Collaboration</span>
-      <h2 class="display-lg">Changes from people without GitHub accounts.</h2>
-      <p class="sub">A designer asks for a change in plain words. It reaches GitHub as a normal pull request in their name, with a CI check and a code owner's review. Nobody hands out repository access.</p>
+      <h2 class="display-lg">Every change is a reviewed pull request.</h2>
+      <p class="sub">A designer asks for a change in plain words. RoleSpace opens the pull request under policy, in the person's name, inside their path allow-list. CI and a human review decide what merges.</p>
     </div>
     <div class="flow reveal">
       <ol class="flow-steps" id="flow-steps">
@@ -252,6 +252,7 @@
           <li><b>One total for all AI</b><span>everyone together</span><p>The gateway refuses every call past it.</p></li>
           <li class="last"><b>A project-wide hard stop</b><span>the whole cloud project</span><p>Once armed, billing is cut before the limit, so nothing can run up a bill.</p></li>
         </ol>
+        <p class="aside">Why it matters: Uber reportedly rolled out an AI coding tool to about 5,000 engineers, had used up its 2026 AI budget by April, and then capped spend per employee, per tool.<sup>4</sup></p>
       </div>
     </div>
   </div>
@@ -262,7 +263,7 @@
     <div class="head reveal">
       <span class="eyebrow">Return on investment</span>
       <h2 class="display-lg">What RoleSpace gives back.</h2>
-      <p class="sub">Every question a PM can answer alone, and every small change a designer can make safely, is developer time handed back. Set the numbers for your company.</p>
+      <p class="sub">Every question a PM can answer alone, and every small change a designer can make safely, is developer time handed back. It matters early: 72% of engineering leaders say new hires need over a month to land their first three meaningful pull requests.<sup>5</sup> Set the numbers for your company.</p>
     </div>
     <div class="roi reveal">
       <div class="roi-inputs mock">
@@ -329,36 +330,29 @@
     <div class="head reveal">
       <span class="eyebrow">Why RoleSpace</span>
       <h2 class="display-lg">How RoleSpace compares.</h2>
-      <p class="sub">Coding assistants, AI gateways and chat assistants are each good at their own job. RoleSpace is the layer none of them provides: one policy that ties AI to each person's role, from a PM's question to a developer's workspace.</p>
+      <p class="sub">Coding assistants, AI gateways and chat assistants are each good at their own job. RoleSpace adds the layer that ties them to each person's role: one policy from a PM's question to a developer's workspace.</p>
     </div>
     <div class="rivals reveal">
-      <article><div class="rival-logo"><img src="/assets/logos/githubcopilot.svg" alt="" width="26" height="26"><b>GitHub Copilot</b></div><p class="what">AI pair programmer, licensed per developer seat.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace adds role levels for PMs and designers, checked citations and allow-listed edits as reviewed PRs.</p></article>
-      <article><div class="rival-logo"><img src="/assets/logos/cursor.svg" alt="" width="26" height="26"><b>Cursor</b></div><p class="what">AI code editor for developers, per seat.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace governs everyone around the editor: repositories, models, budgets and review per person.</p></article>
-      <article><div class="rival-logo"><img src="/assets/logos/windsurf.svg" alt="" width="26" height="26"><b>Windsurf</b> <span class="and">&amp;</span> <img src="/assets/logos/sourcegraph.svg" alt="" width="22" height="22"><b>Cody</b></div><p class="what">AI coding assistants and code search for developers.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace explains every decision with the rule that decided, and keeps a hash-chained record.</p></article>
-      <article><div class="rival-logo"><img src="/assets/logos/openai.svg" alt="" width="26" height="26"><b>ChatGPT Enterprise</b></div><p class="what">A general chat assistant for every employee.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace answers about your code with checked lines, and turns a request into a reviewed change.</p></article>
-      <article><div class="rival-logo"><span class="text-logo">{ }</span><b>LiteLLM · Portkey</b></div><p class="what">AI gateways: keys, budgets and routing.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace builds on a gateway and adds people, repositories, file paths and review on top.</p></article>
+      <article><div class="rival-logo"><img src="/assets/logos/githubcopilot.svg" alt="" width="26" height="26"><b>GitHub Copilot</b></div><p class="what">AI coding across an organization, with policies per org, team or role.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace gives each person one level that sets their tools, paths, models and budget.</p></article>
+      <article><div class="rival-logo"><img src="/assets/logos/cursor.svg" alt="" width="26" height="26"><b>Cursor</b></div><p class="what">An AI code editor with team controls.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>One budget per person covers the assistant and the workspace together.</p></article>
+      <article><div class="rival-logo"><img src="/assets/logos/windsurf.svg" alt="" width="26" height="26"><b>Windsurf</b> <span class="and">&amp;</span> <img src="/assets/logos/sourcegraph.svg" alt="" width="22" height="22"><b>Cody</b></div><p class="what">AI coding and code search.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>Every edit from the assistant is a reviewed pull request inside a per-person path allow-list.</p></article>
+      <article><div class="rival-logo"><img src="/assets/logos/openai.svg" alt="" width="26" height="26"><b>ChatGPT Enterprise</b></div><p class="what">An AI assistant and coding agent for every employee.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>Gateway, workspaces and logs run in your own Google Cloud project, on the Vertex AI models you allow.</p></article>
+      <article><div class="rival-logo"><span class="text-logo">{ }</span><b>LiteLLM · Portkey</b></div><p class="what">AI gateways: keys, budgets and routing.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace builds on a gateway and adds people, repositories, file paths and review.</p></article>
     </div>
     <div class="table-wrap reveal">
-      <table class="compare">
-        <thead><tr><th></th>
-          <th><img src="/assets/logos/githubcopilot.svg" alt="" width="18" height="18">Copilot</th>
-          <th><img src="/assets/logos/cursor.svg" alt="" width="18" height="18">Cursor</th>
-          <th><img src="/assets/logos/openai.svg" alt="" width="18" height="18">ChatGPT Ent.</th>
-          <th><span class="text-logo sm">{ }</span>AI gateways</th>
-          <th class="us"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>RoleSpace</th></tr></thead>
+      <table class="compare two">
+        <thead><tr><th></th><th>Typical today</th><th class="us"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>RoleSpace</th></tr></thead>
         <tbody>
-          <tr><td>Built for PMs and designers, not only developers</td><td class="part">Seat each</td><td class="no">–</td><td class="part">General chat</td><td class="no">–</td><td class="us yes">✓</td></tr>
-          <tr><td>Answers cite exact lines, and each citation is checked</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="us yes">✓</td></tr>
-          <tr><td>Non-developers' edits arrive as reviewed PRs inside an allow-list</td><td class="part">Partly</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="us yes">✓</td></tr>
-          <tr><td>Models, budget and rate limits per person</td><td class="part">Partly</td><td class="part">Partly</td><td class="part">Partly</td><td class="yes">✓</td><td class="us yes">✓</td></tr>
-          <tr><td>Repository and file-path access per person</td><td class="part">Partly</td><td class="part">Partly</td><td class="no">–</td><td class="no">–</td><td class="us yes">✓</td></tr>
-          <tr><td>Every decision explained, with the rule that decided</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="us yes">✓</td></tr>
-          <tr><td>Runs in your own cloud project</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="yes">✓</td><td class="us yes">✓</td></tr>
-          <tr><td>Pay for use, no seat for occasional users</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="yes">✓</td><td class="us yes">✓</td></tr>
+          <tr><td>Who gets what</td><td>Feature and model policies per org, team or role</td><td class="us">One level per person: tools, paths, models and budget</td></tr>
+          <tr><td>Code changes</td><td>Path rules per repository or org</td><td class="us">A path allow-list per person; every edit is a reviewed pull request</td></tr>
+          <tr><td>Spend</td><td>A budget inside each tool</td><td class="us">One budget per person across the assistant and the workspace</td></tr>
+          <tr><td>Models</td><td>The models each tool offers</td><td class="us">Any Vertex AI model you allow, on each person's key</td></tr>
+          <tr><td>Where it runs</td><td>Mostly the vendor's cloud</td><td class="us">Gateway, workspaces and logs in your own Google Cloud project</td></tr>
+          <tr><td>Audit</td><td>Exportable activity logs</td><td class="us">A hash-chained log, plus an evidence pack mapped to SOC 2 and ISO 27001</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="fine reveal">From public product information, October 2026; products change often. Names and logos belong to their owners and are used only to identify the products. RoleSpace builds on an AI gateway (LiteLLM) rather than replacing one, and developers can keep their favourite tools: any tool that accepts a custom model endpoint can run on a person's RoleSpace key.</p>
+    <p class="fine reveal">From public product information, October 2026; products change often. Names and logos belong to their owners and are used only to identify the products. Google's Cloud Workstations and Antigravity are building blocks RoleSpace works with, and RoleSpace builds on an AI gateway (LiteLLM) rather than replacing one.</p>
   </div>
 </section>
 
@@ -367,7 +361,7 @@
     <div class="head reveal"><span class="eyebrow">FAQ</span><h2 class="display-lg">Questions buyers ask.</h2></div>
     <div class="faq reveal">
       <details><summary>Does our code leave our cloud?</summary><p>RoleSpace runs in your own Google Cloud project. Your repositories are read there, and models are called through Vertex AI in the same project. A model from outside Google Cloud is only used if an admin switches it on with your own key.</p></details>
-      <details><summary>Do designers and PMs need GitHub accounts?</summary><p>No. Their changes are opened as pull requests on their behalf, in their name, and they follow checks and reviews inside RoleSpace. Code owners review in GitHub as usual.</p></details>
+      <details><summary>How do changes reach our repositories?</summary><p>Only as pull requests. RoleSpace opens each one under policy, in the person's name and inside their path allow-list, and they follow its checks and reviews inside RoleSpace. CI and a human review decide what merges.</p></details>
       <details><summary>How do we stop runaway AI spend?</summary><p>Every call uses the person's own key, with a monthly budget and per-minute limits. A total cap covers all AI together, and a project-wide hard stop can cut billing before a set amount.</p></details>
       <details><summary>How do we add people?</summary><p>An admin adds a person by work email and picks their level, projects, models and budget. RoleSpace creates their key and logs it. Directory sync with Entra ID or Okta is on the roadmap.</p></details>
     </div>
@@ -394,11 +388,13 @@
     <div class="foot-brand">
       <a class="logo on-dark" href="#top"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>RoleSpace</a>
       <p>Every role gets the right AI. The company keeps control.</p>
+      <div class="foot-legal"><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a></div>
     </div>
     <div><h4>Product</h4><a href="#how">How it works</a><a href="#try">Try it</a><a href="#access">Models &amp; repos</a><a href="#usage">Usage &amp; cost</a></div>
     <div><h4>Company</h4><a href="#roi">ROI</a><a href="#integrate">Integration</a><a href="#security">Security</a><a href="#compare">Compare</a></div>
     <div><h4>Resources</h4><a href="https://github.com/praveensaharan/RoleSpace" rel="noopener" target="_blank">Source code</a><a href="https://github.com/praveensaharan/RoleSpace/blob/main/docs/enterprise-design.md" rel="noopener" target="_blank">Enterprise design</a><a href="https://github.com/praveensaharan/RoleSpace/blob/main/docs/security.md" rel="noopener" target="_blank">Security model</a><a href="#faq">FAQ</a></div>
   </div>
+  <div class="wrap foot-legal"><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a></div>
 </footer>
 
 <div class="modal-back" id="login" hidden>

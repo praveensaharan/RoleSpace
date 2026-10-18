@@ -65,6 +65,13 @@ def test_pages_carry_security_headers():
     assert client.get("/assets/logos/googlegemini.svg").status_code == 200
 
 
+def test_legal_pages_are_public():
+    for path, words in (("/privacy", "Privacy policy"), ("/terms", "Terms of service")):
+        r = client.get(path)
+        assert r.status_code == 200 and words in r.text and "unsafe-inline" not in r.headers["content-security-policy"]
+    assert 'href="/privacy"' in client.get("/").text
+
+
 if __name__ == "__main__":
     tests = [f for name, f in sorted(globals().items()) if name.startswith("test_")]
     for t in tests:
