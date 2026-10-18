@@ -1,6 +1,6 @@
-"""RoleSpace diagrams in the visual language of our earlier design sketch: grey service
-containers with an icon tile, slate-blue component boxes, cascaded workspace cards, purple
-numbered steps and a red primary path. Content is RoleSpace on Google Cloud, as built.
+"""RoleSpace diagrams: the layout of our earlier design sketch (service containers with an icon
+tile, component boxes, cascaded workspace cards, numbered steps, one primary path) in the
+website's colours: white and light grey, black components and steps, blue for the main path. Content is RoleSpace on Google Cloud, as built.
 
 Writes flow-*.html and renders flow-*.png (2x) with Playwright, next to this script:
     python build_flow_diagrams.py
@@ -12,17 +12,18 @@ import sys
 
 HERE = pathlib.Path(__file__).parent
 IMG = HERE  # flow-*.html and flow-*.png are written next to this script
+FONT_URL = (HERE.parent.parent / "website/static/fonts/Inter.woff2").as_uri()
 
-FONT = "Helvetica Neue, Helvetica, Arial, sans-serif"
-GREY, GREY_LINE, LIGHT_GREY = "#7F7F7F", "#6B6B6B", "#D9D9D9"
-SLATE, SLATE_LINE = "#2F5A7E", "#1E3D57"
-BLUE, BAND, BAND_LINE = "#4DA9E6", "#DCEBF7", "#5B9BD5"
-CARD, CARD_LINE = "#DCE6F2", "#E8822E"
-PURPLE, RED, INK = "#7E2F92", "#E0302A", "#111111"
-GREEN, GREEN_LINE = "#D5E8D4", "#6AA84F"
-LAVENDER = "#EBD8F0"
-ICON = {"compute": "#E8822E", "run": "#4285F4", "ai": "#2E9E83", "sql": "#4285F4", "store": "#F29900",
-        "secret": "#5F6368", "iap": "#4285F4", "git": "#24292F"}
+FONT = "Inter, Helvetica Neue, Arial, sans-serif"
+GREY, GREY_LINE, LIGHT_GREY = "#F5F5F5", "#E5E7EB", "#E5E7EB"
+SLATE, SLATE_LINE = "#111111", "#111111"
+BLUE, BAND, BAND_LINE = "#3B82F6", "#F8F9FA", "#E5E7EB"
+CARD, CARD_LINE = "#FFFFFF", "#D1D5DB"
+PURPLE, RED, INK = "#111111", "#3B82F6", "#111111"
+GREEN, GREEN_LINE = "#FFFFFF", "#D1D5DB"
+LAVENDER = "#F5F5F5"
+ICON = {"compute": "#111111", "run": "#111111", "ai": "#111111", "sql": "#111111", "store": "#111111",
+        "secret": "#111111", "iap": "#111111", "git": "#111111"}
 
 e = html.escape
 
@@ -50,12 +51,12 @@ def slate(x, y, w, h, label, size=17, lines=None, fill=SLATE):
     return box(x, y, w, h, fill, SLATE_LINE, rx=7, sw=2) + text(x + w / 2, ty, label, size, "#FFFFFF", lines=lines)
 
 
-def container(x, y, w, h, title, sub="", icon=None, fill=GREY, title_fill="#FFFFFF"):
-    out = [box(x, y, w, h, fill, "none", rx=4, shadow=True)]
+def container(x, y, w, h, title, sub="", icon=None, fill=GREY, title_fill=INK):
+    out = [box(x, y, w, h, fill, "#E5E7EB", rx=12, sw=1.5)]
     tx = x + w / 2 + (30 if icon else 0)
     out.append(text(tx, y + 38, title, 24, title_fill, 500))
     if sub:
-        out.append(text(tx, y + 62, sub, 15, "#EDEDED" if fill == GREY else "#444"))
+        out.append(text(tx, y + 62, sub, 15, "#6B7280" if fill == GREY else "#444"))
     if icon:
         out.append(icon_tile(x - 8, y - 8, icon))
     return "".join(out)
@@ -63,7 +64,7 @@ def container(x, y, w, h, title, sub="", icon=None, fill=GREY, title_fill="#FFFF
 
 def icon_tile(x, y, kind, size=62):
     c = ICON[kind]
-    g = [f'<rect x="{x}" y="{y}" width="{size}" height="{size}" fill="{c}"/>']
+    g = [f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="{size * 0.2:.1f}" fill="{c}"/>']
     cx, cy, s = x + size / 2, y + size / 2, size / 62
     W = 'fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"'
     if kind == "compute":   # a chip
@@ -103,7 +104,6 @@ def icon_tile(x, y, kind, size=62):
 
 def step(x, y, n, r=24):
     return (f'<circle cx="{x}" cy="{y}" r="{r}" fill="{PURPLE}" filter="url(#shadow)"/>'
-            f'<circle cx="{x - r * 0.25}" cy="{y - r * 0.3}" r="{r * 0.55}" fill="#FFFFFF" opacity="0.10"/>'
             + text(x, y + r * 0.42, str(n), r * 1.25, "#FFFFFF", 500))
 
 
@@ -117,6 +117,13 @@ def label(x, y, s, size=16, fill=INK, bg="#FFFFFF"):
     w = len(s) * size * 0.56 + 12
     return (f'<rect x="{x - w / 2:.1f}" y="{y - size * 0.95:.1f}" width="{w:.1f}" height="{size * 1.35:.1f}" fill="{bg}"/>'
             + text(x, y, s, size, fill))
+
+
+LOGOS = HERE.parent.parent / "website/static/logos"
+
+
+def logo(name, x, y, size=26):
+    return f'<image href="{(LOGOS / f"{name}.svg").as_uri()}" x="{x}" y="{y}" width="{size}" height="{size}"/>'
 
 
 def person(x, y, s=1.0, badge=None):
@@ -150,7 +157,7 @@ def page(name, w, h, body):
   <rect width="{w}" height="{h}" fill="#FFFFFF"/>
   {body}
 </svg>"""
-    (IMG / f"{name}.html").write_text(f'<!doctype html><html><head><meta charset="utf-8"><style>html,body{{margin:0}}</style>'
+    (IMG / f"{name}.html").write_text(f'<!doctype html><html><head><meta charset="utf-8"><style>@font-face{{font-family:Inter;src:url("{FONT_URL}") format("woff2");font-weight:100 900}}html,body{{margin:0}}</style>'
                                       f'</head><body>{svg}</body></html>')
     return name
 
@@ -204,8 +211,9 @@ def env_flow():
     b.append(label(830, 546, "own key", 15, RED))
     # 5 Gemini
     b.append(box(380, 800, 340, 92, GREEN, GREEN_LINE, rx=4, sw=2))
-    b.append(text(550, 840, "Gemini on Vertex AI", 23, INK, 600))
-    b.append(text(550, 868, "Flash · Pro", 17, "#444"))
+    b.append(text(550, 840, "Models on Vertex AI", 23, INK, 600))
+    b.append(text(550, 868, "Gemini · Kimi K2 · Qwen", 17, "#444"))
+    b.append(logo("googlegemini", 372, 815) + logo("kimi", 372, 850, 22) + logo("qwen", 700, 832, 26))
     b.append(path("M550,730 V800", RED, 3.2))
     b.append(label(550, 772, "only path to Gemini", 15, RED))
     b.append(step(720, 800, 5))
@@ -237,8 +245,8 @@ def work_flow():
     W, H = 1720, 1120
     b = []
     # the laptop: a browser, nothing installed
-    b.append(box(150, 100, 520, 470, LIGHT_GREY, "#BFBFBF", rx=4, sw=3))
-    b.append('<path d="M150,570 L670,570 L720,620 L100,620 Z" fill="#E7E7E7" stroke="#BFBFBF" stroke-width="3"/>')
+    b.append(box(150, 100, 520, 470, LIGHT_GREY, "#D1D5DB", rx=4, sw=3))
+    b.append('<path d="M150,570 L670,570 L720,620 L100,620 Z" fill="#E5E7EB" stroke="#D1D5DB" stroke-width="3"/>')
     b.append(person(52, 300, 1.0, "iap"))
     b.append(path("M112,325 H150", INK, 2.2))
     b.append(box(182, 130, 456, 170, BLUE, "none", rx=26))
@@ -246,11 +254,11 @@ def work_flow():
     b.append(slate(232, 190, 356, 44, "RoleSpace app", 19))
     b.append(slate(232, 242, 356, 44, "VS Code in the browser", 19))
     b.append(box(172, 316, 476, 142, "none", RED, rx=2, sw=3.5))
-    b.append(slate(232, 328, 356, 52, "Assistant: Ask · Suggest", 19, fill="#5B9BD5"))
-    b.append(slate(232, 392, 356, 52, "Gemini CLI in the terminal", 19, fill="#5B9BD5"))
-    b.append(box(182, 476, 456, 74, "#5B9BD5", SLATE_LINE, rx=4, sw=2))
+    b.append(slate(232, 328, 356, 52, "Assistant: Ask · Suggest", 19, fill="#374151"))
+    b.append(slate(232, 392, 356, 52, "Gemini CLI in the terminal", 19, fill="#374151"))
+    b.append(box(182, 476, 456, 74, INK, SLATE_LINE, rx=4, sw=2))
     b.append(text(410, 508, "No code and no keys on the laptop", 19, "#FFFFFF", 500))
-    b.append(text(410, 532, "everything runs in Google Cloud", 16, "#EAF2FB"))
+    b.append(text(410, 532, "everything runs in Google Cloud", 16, "#F8F9FA"))
     # the app, under the laptop
     b.append(container(150, 760, 520, 230, "Cloud Run · RoleSpace app", "", "run"))
     b.append(slate(190, 820, 210, 50, "Ask agent", 19))
@@ -270,11 +278,11 @@ def work_flow():
     b.append(step(760, 330, 2, 28))
     # gateway and Gemini
     b.append(container(800, 700, 560, 150, "Model gateway", "", "run"))
-    b.append(box(980, 770, 330, 52, "#DCE6F2", CARD_LINE, rx=6, sw=2))
+    b.append(box(980, 770, 330, 52, "#FFFFFF", CARD_LINE, rx=6, sw=2))
     b.append(text(1145, 803, "LiteLLM · one key per person", 18, INK, 500))
     b.append(container(800, 900, 560, 130, "Vertex AI", "", "ai"))
-    b.append(box(1000, 960, 310, 52, "#DCE6F2", CARD_LINE, rx=6, sw=2))
-    b.append(text(1155, 993, "Gemini Flash · Pro", 18, INK, 500))
+    b.append(box(1000, 960, 310, 52, "#FFFFFF", CARD_LINE, rx=6, sw=2))
+    b.append(text(1155, 993, "Gemini · Kimi K2 · Qwen", 18, INK, 500))
     b.append(path("M670,796 H980", RED, 3))
     b.append(label(735, 788, "own key", 15, RED))
     b.append(path("M1270,513 V770", RED, 3))
@@ -303,7 +311,7 @@ def project_arch():
     b.append(box(260, 40, 1130, 900, "#FFFFFF", INK, rx=2, sw=2))
     b.append(text(285, 74, "Google Cloud project · us-central1", 20, INK, 600, "start"))
     # serverless band
-    b.append(box(300, 100, 700, 220, "#F3F3F3", "#9E9E9E", rx=6, sw=1.5))
+    b.append(box(300, 100, 700, 220, "#F8F9FA", "#D1D5DB", rx=6, sw=1.5))
     b.append(text(320, 130, "Serverless · Cloud Run", 18, "#333", 600, "start"))
     b.append(container(330, 150, 290, 150, "RoleSpace app", "", "run"))
     b.append(slate(350, 205, 250, 38, "Ask · Suggest agents", 16))
@@ -314,14 +322,14 @@ def project_arch():
     b.append(path("M620,224 H690", RED, 3))
     b.append(label(655, 216, "own key", 14, RED))
     # managed services column
-    b.append(box(1030, 100, 330, 600, "#F3F3F3", "#9E9E9E", rx=6, sw=1.5))
+    b.append(box(1030, 100, 330, 600, "#F8F9FA", "#D1D5DB", rx=6, sw=1.5))
     b.append(text(1050, 130, "Managed services", 18, "#333", 600, "start"))
-    svc = [("ai", "Vertex AI", "Gemini Flash · Pro"), ("sql", "Cloud SQL", "keys · budgets · spend"),
+    svc = [("ai", "Vertex AI", "Gemini · Kimi K2 · Qwen"), ("sql", "Cloud SQL", "keys · budgets · spend"),
            ("store", "Firestore", "audit chain · requests"), ("secret", "Secret Manager", "keys · tokens"),
            ("iap", "Cloud Logging", "every call and decision")]
     for i, (k, t, sub) in enumerate(svc):
         y = 150 + i * 108
-        b.append(box(1050, y, 290, 92, "#FFFFFF", "#9E9E9E", rx=4, sw=1.5))
+        b.append(box(1050, y, 290, 92, "#FFFFFF", "#D1D5DB", rx=4, sw=1.5))
         b.append(icon_tile(1062, y + 22, k, 48))
         b.append(text(1205, y + 40, t, 18, INK, 600))
         b.append(text(1205, y + 66, sub, 15, "#555"))
@@ -333,18 +341,18 @@ def project_arch():
     b.append(path("M475,300 V336 H1022 V412 H1050", INK, 1.6, dash=True))
     b.append(label(700, 336, "audit · secrets", 14))
     # VPC
-    b.append(box(300, 370, 700, 330, "#FFFFFF", "#8E6CC8", rx=4, sw=2.5, dash=True))
-    b.append(text(320, 402, "VPC rs-vpc", 18, "#5E3BA8", 600, "start"))
-    b.append(box(320, 420, 660, 260, "#EEF6EA", "#6AA84F", rx=4, sw=2))
-    b.append(text(340, 450, "Private subnet rs-private · 10.1.2.0/24", 16, "#2E6B1F", 600, "start"))
+    b.append(box(300, 370, 700, 330, "#FFFFFF", "#9CA3AF", rx=4, sw=2.5, dash=True))
+    b.append(text(320, 402, "VPC rs-vpc", 18, "#374151", 600, "start"))
+    b.append(box(320, 420, 660, 260, "#F8F9FA", "#D1D5DB", rx=4, sw=2))
+    b.append(text(340, 450, "Private subnet rs-private · 10.1.2.0/24", 16, "#111111", 600, "start"))
     b.append(container(560, 480, 400, 180, "coder-vm", "no public IP", "compute"))
-    b.append(box(585, 572, 350, 70, "#DCE6F2", CARD_LINE, rx=6, sw=2))
+    b.append(box(585, 572, 350, 70, "#FFFFFF", CARD_LINE, rx=6, sw=2))
     b.append(text(760, 600, "Coder · workspaces", 17, INK, 500))
     b.append(text(760, 624, "relay adds the VM's identity", 15, "#444"))
-    b.append(box(340, 480, 190, 84, "#FFFFFF", "#9E9E9E", rx=4, sw=1.5))
+    b.append(box(340, 480, 190, 84, "#FFFFFF", "#D1D5DB", rx=4, sw=1.5))
     b.append(text(435, 512, "Firewall", 17, INK, 600))
     b.append(text(435, 536, "IAP range only, 22 · 3000", 13, "#444"))
-    b.append(box(340, 580, 190, 84, "#FFFFFF", "#9E9E9E", rx=4, sw=1.5))
+    b.append(box(340, 580, 190, 84, "#FFFFFF", "#D1D5DB", rx=4, sw=1.5))
     b.append(text(435, 612, "Cloud NAT", 17, INK, 600))
     b.append(text(435, 636, "outbound only", 14, "#444"))
     b.append(path("M860,480 V300", RED, 3))
@@ -353,27 +361,27 @@ def project_arch():
     b.append(box(300, 750, 700, 150, "#FFFFFF", INK, rx=2, sw=1.5, dash=True))
     b.append(text(650, 790, "Designed, not built", 18, "#555", 600))
     b.append(text(650, 822, "Entra ID / Okta groups (SAML, SCIM) · Model Armor", 16, "#555"))
-    b.append(text(650, 848, "Cloud KMS keys · more instances, sessions in Firestore", 16, "#555"))
+    b.append(text(650, 848, "Cloud KMS keys · more app instances", 16, "#555"))
     # outside: people and developers, GitHub
     b.append(person(110, 120, 0.85))
     b.append(text(110, 214, "People", 18, INK, 600))
-    b.append(box(40, 240, 190, 90, GREY, "none", rx=2, shadow=True))
-    b.append(text(135, 278, "HTTPS LB", 19, "#FFFFFF", 500))
-    b.append(text(135, 304, "+ IAP sign-in", 17, "#F2F2F2"))
+    b.append(box(40, 240, 190, 90, GREY, "#E5E7EB", rx=10))
+    b.append(text(135, 278, "HTTPS LB", 19, INK, 600))
+    b.append(text(135, 304, "+ IAP sign-in", 17, "#6B7280"))
     b.append(path("M110,222 V240"))
     b.append(path("M230,285 H330", INK, 2.4))
     b.append(person(110, 440, 0.85))
     b.append(text(110, 534, "Developers", 18, INK, 600))
-    b.append(box(40, 560, 190, 90, GREY, "none", rx=2, shadow=True))
-    b.append(text(135, 598, "IAP TCP", 19, "#FFFFFF", 500))
-    b.append(text(135, 624, "tunnel :3000", 17, "#F2F2F2"))
+    b.append(box(40, 560, 190, 90, GREY, "#E5E7EB", rx=10))
+    b.append(text(135, 598, "IAP TCP", 19, INK, 600))
+    b.append(text(135, 624, "tunnel :3000", 17, "#6B7280"))
     b.append(path("M110,542 V560"))
     b.append(path("M230,605 H290 V522 H340", INK, 2.4))
     b.append(path("M530,522 H560", INK, 2.4))
     b.append(container(1460, 150, 230, 220, "GitHub", "firstround-demo", "git"))
-    b.append(text(1575, 280, "pull requests", 16, "#FFFFFF"))
-    b.append(text(1575, 304, "CI allow-list check", 16, "#FFFFFF"))
-    b.append(text(1575, 328, "1 human review", 16, "#FFFFFF"))
+    b.append(text(1575, 280, "pull requests", 16, "#374151"))
+    b.append(text(1575, 304, "CI allow-list check", 16, "#374151"))
+    b.append(text(1575, 328, "1 human review", 16, "#374151"))
     b.append(path("M600,150 V88 H1575 V150", RED, 2.6))
     b.append(label(1180, 88, "Suggest: pull request", 15, RED))
     b.append(path("M340,622 H316 V720 H1575 V370", INK, 2))
@@ -389,7 +397,7 @@ def user_mgmt():
     lanes = [(40, "Person"), (360, "Sign-in"), (720, "Policy: role.yaml"), (1120, "What the level gets")]
     widths = [280, 320, 360, 540]
     for (x, t), w in zip(lanes, widths):
-        b.append(box(x, 40, w, 680, "#BDD7EE", "none", rx=2))
+        b.append(box(x, 40, w, 680, "#E5E7EB", "none", rx=2))
         b.append(text(x + w / 2, 80, t, 22, INK, 600))
     b.append(person(180, 200, 1.0))
     b.append(text(180, 300, "A member of the team", 18, INK, 500))
@@ -410,7 +418,7 @@ def user_mgmt():
     b.append(text(900, 210, "Level", 22, "#FFFFFF", 600))
     b.append(text(900, 240, "Ask · Suggest", 18, "#FFFFFF"))
     b.append(text(900, 264, "Build · Govern", 18, "#FFFFFF"))
-    b.append(text(900, 296, "demo: persona menu", 15, "#DDE7F0"))
+    b.append(text(900, 296, "demo: persona menu", 15, "#F8F9FA"))
     b.append(path("M645,230 H760"))
     b.append(path("M645,445 H700 V290 H760", INK, 2, dash=True))
     b.append(box(760, 380, 280, 150, "#FFFFFF", INK, rx=4, sw=2))
@@ -457,8 +465,8 @@ def enterprise_scale():
     b.append(text(930, 96, "Google sign-in · Identity-Aware Proxy for the app and the workspaces (no VPN)", 20, INK, 500))
     b.append(path("M330,640 H360 V88 H380"))
     # perimeter
-    b.append(box(380, 150, 1100, 870, "#FFFFFF", "#8E6CC8", rx=4, sw=2.5, dash=True))
-    b.append(text(400, 182, "VPC Service Controls perimeter · Cloud KMS keys", 16, "#5E3BA8", 600, "start"))
+    b.append(box(380, 150, 1100, 870, "#FFFFFF", "#9CA3AF", rx=4, sw=2.5, dash=True))
+    b.append(text(400, 182, "VPC Service Controls perimeter · Cloud KMS keys", 16, "#374151", 600, "start"))
     # control plane
     b.append(box(400, 200, 480, 250, BAND, BAND_LINE, rx=4, sw=2))
     b.append(text(640, 236, "RoleSpace control plane · Cloud Run", 21, INK, 500))
@@ -476,7 +484,7 @@ def enterprise_scale():
     b.append(box(400, 500, 480, 330, BAND, BAND_LINE, rx=4, sw=2))
     b.append(text(640, 536, "Model gateway · LiteLLM, high availability", 20, INK, 500))
     b.append(slate(420, 560, 440, 54, "Per-person keys · budgets · rate limits", 18))
-    b.append(box(420, 628, 440, 54, "#F8D7E4", "#C2185B", rx=7, sw=2))
+    b.append(box(420, 628, 440, 54, "#FFFFFF", "#111111", rx=7, sw=2))
     b.append(text(640, 662, "Model Armor: prompt and response screening", 17, INK, 500))
     b.append(slate(420, 696, 210, 54, "Cloud SQL HA", 17))
     b.append(slate(650, 696, 210, 54, "Memorystore", 17))
@@ -487,12 +495,15 @@ def enterprise_scale():
     b.append(label(910, 540, "key", 14, RED))
     # models, reached through the egress proxy
     b.append(text(1740, 182, "Models, chosen per level", 19, INK, 600))
-    models = [("Gemini on Vertex AI", "Flash · Pro"), ("Claude on Vertex AI", "Model Garden"), ("OpenAI", "customer's own key")]
+    models = [("Gemini on Vertex AI", "Flash · Pro"), ("Kimi K2 · Qwen3 Coder", "Vertex AI Model Garden"), ("Claude · OpenAI", "switched on per level")]
     for i, (t, sub) in enumerate(models):
         y = 210 + i * 130
         b.append(box(1600, y, 280, 100, GREEN, GREEN_LINE, rx=4, sw=2))
-        b.append(text(1740, y + 44, t, 20, INK, 600))
-        b.append(text(1740, y + 72, sub, 16, "#444"))
+        b.append(text(1752, y + 44, t, 19, INK, 600))
+        b.append(text(1752, y + 72, sub, 16, "#444"))
+        marks = (["googlegemini"], ["kimi", "qwen"], ["claude", "openai"])[i]
+        for k, m in enumerate(marks):
+            b.append(logo(m, 1612, y + (37 if len(marks) == 1 else 18 + k * 38), 26))
     b.append(path("M880,625 H1575 V260 H1600", RED, 3.2))
     b.append(path("M1575,390 H1600", RED, 3.2))
     b.append(path("M1575,520 H1600", RED, 3.2, dash=True))
@@ -500,25 +511,25 @@ def enterprise_scale():
     b.append(text(1485, 631, "Secure Web Proxy", 13, "#FFFFFF", 500))
     b.append(step(1880, 210, 5))
     # data and records
-    b.append(box(940, 655, 520, 175, "#F3F3F3", "#9E9E9E", rx=6, sw=1.5))
+    b.append(box(940, 655, 520, 175, "#F8F9FA", "#D1D5DB", rx=6, sw=1.5))
     b.append(text(960, 684, "Data and records", 18, "#333", 600, "start"))
     for i, (k, t, sub) in enumerate([("store", "Firestore", "audit chain"), ("secret", "Secret Manager", "keys"),
                                       ("store", "Cloud Storage", "data drop")]):
         x = 960 + i * 165
-        b.append(box(x, 698, 152, 116, "#FFFFFF", "#9E9E9E", rx=4, sw=1.5))
+        b.append(box(x, 698, 152, 116, "#FFFFFF", "#D1D5DB", rx=4, sw=1.5))
         b.append(icon_tile(x + 58, 706, k, 36))
         b.append(text(x + 76, 770, t, 15, INK, 600))
         b.append(text(x + 76, 796, sub, 14, "#555"))
     # usage analytics and delivery
-    b.append(box(400, 860, 480, 140, "#F3F3F3", "#9E9E9E", rx=6, sw=1.5))
+    b.append(box(400, 860, 480, 140, "#F8F9FA", "#D1D5DB", rx=6, sw=1.5))
     b.append(text(420, 890, "Usage analytics", 18, "#333", 600, "start"))
     b.append(text(640, 930, "Spend logs → BigQuery → Looker Studio", 18, INK, 500))
     b.append(text(640, 960, "cost per person, project and outcome", 16, "#555"))
     b.append(path("M640,830 V860"))
-    b.append(box(940, 860, 520, 140, "#F3F3F3", "#9E9E9E", rx=6, sw=1.5))
+    b.append(box(940, 860, 520, 140, "#F8F9FA", "#D1D5DB", rx=6, sw=1.5))
     b.append(text(960, 890, "Delivery", 18, "#333", 600, "start"))
     b.append(text(1200, 930, "GitHub or GitLab through a RoleSpace app:", 17, INK, 500))
-    b.append(text(1200, 958, "PRs for people without accounts · CODEOWNERS · CI", 16, "#555"))
+    b.append(text(1200, 958, "PRs opened under policy · CODEOWNERS · CI", 16, "#555"))
     b.append(step(1460, 860, 6))
     # outside: IaC and documents
     b.append(box(1600, 660, 280, 140, "#FFFFFF", INK, rx=2, sw=1.5, dash=True))

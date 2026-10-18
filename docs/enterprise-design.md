@@ -3,7 +3,7 @@
 This page answers five questions a B2B buyer asks:
 1. How is token use and cost tracked and limited?
 2. What changes at enterprise scale?
-3. Can someone open a merge request without a GitHub account?
+3. How does a change from a PM or designer become a merge request?
 4. Can a customer choose Claude, OpenAI or Gemini?
 5. How does an admin onboard a new person?
 
@@ -62,18 +62,18 @@ The prototype is the small version of this picture. It has the same levels, the 
 | **Audit** | Hash-chained events in Firestore; evidence pack mapped to SOC 2 and ISO 27001 | Also exported to a Cloud Logging bucket with a retention lock, and to BigQuery |
 | **Deployment** | `deploy.sh` and documented `gcloud` steps | Terraform builds every piece, with one Google Cloud project per business unit (or per customer, for single-tenant installs) |
 
-## 3. Merge requests without a GitHub account
+## 3. Merge requests opened under policy
 
 ### Built
 
-Designers and PMs don't need GitHub accounts. Their changes still reach GitHub as normal pull requests:
+RoleSpace opens the pull request under policy, in the person's name; CI and a human review decide what merges. Each change reaches GitHub as a normal pull request:
 1. The person asks for a change in the assistant. The edit must pass the path allow-list twice: when it is proposed and again when it is written.
 2. They review the diff and click **Open pull request**.
-3. RoleSpace opens the pull request with its own GitHub token. The commit's author and committer are the person (name and work email), because they reviewed the change and chose to open it. The commit carries no tool or AI trailer. The description says they have no GitHub account. The audit chain keeps the full record inside the company: who asked, when, and under which policy version.
-4. CI checks the allow-list again, and branch protection requires one human review. The code owners, who do have GitHub accounts, review and merge as usual.
+3. RoleSpace opens the pull request with its own GitHub token. The commit's author and committer are the person (name and work email), because they reviewed the change and chose to open it. The commit carries no tool or AI trailer. The audit chain keeps the full record inside the company: who asked, when, and under which policy version.
+4. CI checks the allow-list again, and branch protection requires one human review. The code owners review and merge as usual.
 5. The **Changes** page (`/api/changes`) shows each pull request the person opened: its checks (passing, failing or pending), its review state, its comments, and whether it was merged. Govern sees everyone's.
 
-People without a GitHub account can't push, merge or approve. The bot's token covers one repository and only Contents and Pull requests.
+Through RoleSpace, nobody can push to `main`, merge or approve. The bot's token covers one repository and only Contents and Pull requests.
 
 ### Designed
 
@@ -118,7 +118,7 @@ People without a GitHub account can't push, merge or approve. The bot's token co
 - the level;
 - the projects (each project is a repository and its owning team);
 - the models, limited to what the level allows;
-- a budget, up to $20.
+- a budget, up to a per-person cap (`MAX_BUDGET_USD` in `main.py`).
 
 As the admin fills it in, a plan shows exactly what will be created. On **Add**, RoleSpace:
 1. checks the request (domain, duplicates, team, projects, that the models fit the level, the budget cap) and refuses it with reasons if anything is wrong;

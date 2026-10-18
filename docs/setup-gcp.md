@@ -54,7 +54,7 @@ Then deploy [`gateway/`](../gateway):
 
 Callers send a Google ID token in `X-Serverless-Authorization` and the LiteLLM key in `Authorization`.
 
-`gateway/config.yaml` also sets one ceiling for all AI spend together (`max_budget: 25`, `budget_duration: 30d`). Past it, the gateway refuses every call, whatever each person's budget says. Only a gateway redeploy changes it.
+`gateway/config.yaml` also sets a hard ceiling for all AI spend together (`max_budget` with `budget_duration: 30d`). Past it, the gateway refuses every call, whatever each person's budget says. Only a gateway redeploy changes it.
 
 Give each person a key, with their level's models and budget, limited to model routes:
 

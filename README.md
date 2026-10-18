@@ -11,9 +11,17 @@ Built for the **AI Builder Cup 2026** (theme: *Future of Work & Enterprise Produ
 | Website | https://rolespace.duckdns.org (public, interactive product tour; "Log in to your organization" leads to the app) |
 | Live app | https://rolespace.duckdns.org/rolespace-ent/ (sign in with Google, then pick a persona) |
 | Demo video (3 min) | *add the link* |
-| Submission deck | [docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx](docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx) · [design deck (PDF)](docs/deck/RoleSpace-deck.pdf) |
+| Submission deck | [PDF](docs/deck/RoleSpace-AI-Builder-Cup-submission.pdf) · [PPTX](docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx) · [design deck (PDF)](docs/deck/RoleSpace-deck.pdf) |
 
 ![How RoleSpace works](docs/architecture/flow-1-env-usage.png)
+
+## Built on Google Cloud
+
+- **Gemini on Vertex AI.** Every answer and every edit is a Gemini call (Gemini 3.8 Flash and 3.1 Pro). The Ask and Suggest agents are built with the Agent Development Kit (ADK) and reach Gemini through a LiteLLM model gateway, each on the person's own key. Only the gateway's service account may call Vertex AI. Kimi K2 and Qwen3 Coder from Model Garden go through the same gateway.
+- **Cloud Run.** Runs the RoleSpace app (FastAPI and ADK), the LiteLLM model gateway, the public website, and the spending kill switch (`billing_cap/`).
+- **Firestore (Firebase's database).** Holds the policy changes made in Govern, onboarded members, saved chats (deleted after 30 days by a TTL policy), access requests, temporary grants, the answer log, and the hash-chained audit log.
+
+Every other Google Cloud service it uses is listed under [Google Cloud services](#google-cloud-services).
 
 ## The problem
 
@@ -93,7 +101,7 @@ Enterprise controls:
 - **Rate limits per level:** requests and tokens per minute on every key, next to the budget.
 - **Model choice:** a model catalog in `role.yaml` (Gemini now; Claude on Vertex AI and OpenAI ready to switch on). Each level lists its models, and a person picks one of theirs in the assistant. Their key enforces the same list.
 - **Onboarding:** an admin adds a person by work email, with their level, projects, models and budget. RoleSpace creates their key, stores it in Secret Manager and logs it. **Remove** blocks the key at once.
-- **Changes:** people without a GitHub account follow their pull requests (checks, review, merged) inside RoleSpace. The commit is in their name, since they reviewed the change before opening it.
+- **Changes:** RoleSpace opens the pull request under policy, in the person's name; CI and a human review decide what merges. The person follows it (checks, review, merged) on the Changes page.
 - **Several repositories:** each project in `role.yaml` is a repository with its owning team. Only the projects marked for pull requests accept edits.
 - **Repo access:** Govern → Repo access decides who can ask about and work on each repository. Every change goes into the audit log.
 - **Issues & PRs:** open issues and recent pull requests, live from GitHub, for the repositories a person can access.
@@ -139,7 +147,7 @@ The sample is small, and the checker proves where a citation points, not that th
 | Agent Development Kit (ADK) 2.12 | The Ask and Suggest agents, one per request, with tools chosen by level |
 | Cloud Run | The RoleSpace app (FastAPI), the LiteLLM model gateway, the public website and the spending kill switch |
 | Cloud SQL (Postgres 16) | Gateway keys, budgets and spend |
-| Firestore | Audit chain, requests, temporary grants, answer log |
+| Firestore | Policy changes, members, saved chats, audit chain, requests, temporary grants, answer log |
 | Secret Manager | Every key and token |
 | Identity-Aware Proxy and an HTTPS load balancer | Google sign-in for the app, and the TCP tunnel to Coder |
 | Compute Engine, VPC and Cloud NAT | The Coder VM in a private subnet with no public IP |
