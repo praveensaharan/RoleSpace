@@ -56,6 +56,11 @@ model_list:
 
 litellm_settings:
   drop_params: true
+  # Hard ceiling for the whole gateway: every key together, every model, per 30 days. Per-person
+  # budgets sit under it, and nothing in the app (budget edits, onboarding, the policy form) can
+  # raise it: only a gateway redeploy can. LiteLLM keeps the running total in its database.
+  max_budget: 25
+  budget_duration: 30d
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

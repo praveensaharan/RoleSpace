@@ -40,6 +40,8 @@ STATIC = pathlib.Path(__file__).with_name("static")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 BUILD = str(int(time.time()))  # cache-buster for static files, new on every deploy
 MAX_BUDGET_USD = 20.0
+MAX_MEMBERS = 8            # people added through onboarding: each one is another budgeted key
+SYNC_COOLDOWN = 15         # seconds between forced "Sync now" fetches of one repository
 PR_LIMIT_PER_SESSION = 6   # pull requests per browser per hour
 PR_LIMIT_TOTAL = 30        # and for everyone together
 CHAT_LIMIT_PER_IP = 40     # per hour; the URL is public, budgets cap cost and these cap load
@@ -149,11 +151,21 @@ def _convo(request: Request, pid: str) -> str:
 
 
 def _client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for", "")
-    return fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
+    """Who is asking, for rate limits. The Google account IAP signed in comes first: only IAP may
+    call the app, and IAP sets this header itself, so it can't be forged. Without it, the address
+    the load balancer saw (it appends the client and its own address to X-Forwarded-For; earlier
+    entries are whatever the caller sent, so they are never trusted)."""
+    user = request.headers.get("x-goog-authenticated-user-email", "")
+    if user:
+        return user.split(":", 1)[-1].lower()
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    if len(hops) >= 2:
+        return hops[-2]
+    return hops[0] if hops else (request.client.host if request.client else "?")
 
 
 _pass = {"at": 0.0, "value": None}
+_pass_misses: dict[str, collections.deque] = collections.defaultdict(collections.deque)
 
 
 def require_passcode(request: Request) -> None:
@@ -165,8 +177,15 @@ def require_passcode(request: Request) -> None:
         except gexc.NotFound:
             _pass["value"] = None
         _pass["at"] = time.time()
-    code = _pass["value"]
-    if code and not hmac.compare_digest(request.headers.get("x-demo-passcode", "").encode(), code.encode()):
+    code, given, ip = _pass["value"], request.headers.get("x-demo-passcode", ""), _client_ip(request)
+    misses = _pass_misses[ip]
+    while misses and time.time() - misses[0] > 900:
+        misses.popleft()
+    if len(misses) >= 10:   # guessing: 10 wrong passcodes in 15 minutes from one address
+        raise HTTPException(429, "Too many wrong passcodes. Wait 15 minutes and try again.")
+    if code and not hmac.compare_digest(given.encode(), code.encode()):
+        if given:
+            misses.append(time.time())
         raise HTTPException(401, PASSCODE_NEEDED)
 
 
@@ -381,6 +400,7 @@ def open_pr(body: PrIn, request: Request) -> dict:
     finally:
         _pr_inflight.discard(body.edit_id)
     agents.drop_edit(key, body.edit_id)  # only once the PR exists; a failure keeps the preview
+    _gh_activity.pop(project, None)   # the new pull request shows up in Issues & pull requests at once
     try:
         services.audit("pr_opened", p["id"], p["level"], f"PR opened for {edit['path']}: {url}", url=url)
     except Exception:
@@ -724,6 +744,90 @@ def suspend(body: SuspendIn) -> dict:
     return {"ok": True, "suspended": body.suspended}
 
 
+# --- GitHub: a repository's issues and pull requests, for people without GitHub accounts ---
+
+_gh_activity: dict[str, tuple[float, dict]] = {}
+
+
+@app.get("/api/github")
+def github_activity(person: str, project: str) -> dict:
+    """Open issues and recent pull requests of a repository this person can access, live from
+    GitHub (cached for a minute). Read-only: nobody needs a GitHub account to follow the work."""
+    p = _person(person)
+    if project not in roles.person_projects(p):
+        raise HTTPException(403, f"{p['name']} has no access to {project}")
+    hit = _gh_activity.get(project)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    repo = agents.repo_name(project)
+    issues = [i for i in services.github_list(repo, "/issues?state=open&per_page=50&sort=updated")
+              if "pull_request" not in i]
+    pulls = services.github_list(repo, "/pulls?state=all&per_page=30&sort=updated&direction=desc")
+    out = {
+        "project": project, "repo": repo, "fetched": time.time(),
+        "issues": [{"number": i["number"], "title": i["title"], "url": i["html_url"],
+                    "author": (i.get("user") or {}).get("login"), "comments": i.get("comments", 0),
+                    "labels": [{"name": x["name"], "color": x.get("color", "e5e7eb")} for x in i.get("labels", [])],
+                    "created": i.get("created_at"), "updated": i.get("updated_at")} for i in issues],
+        "pulls": [{"number": x["number"], "title": x["title"], "url": x["html_url"],
+                   "author": (x.get("user") or {}).get("login"), "draft": x.get("draft", False),
+                   "state": "merged" if x.get("merged_at") else x["state"], "branch": x["head"]["ref"],
+                   "from_rolespace": x["head"]["ref"].startswith("rolespace/"),
+                   "created": x.get("created_at"), "updated": x.get("updated_at")} for x in pulls],
+    }
+    _gh_activity[project] = (time.time(), out)
+    return out
+
+
+# --- Govern: reset the demo for the next judge --------------------------------------------
+
+@app.post("/api/govern/demo-reset", dependencies=[Depends(require_passcode)])
+def demo_reset(body: PersonIn) -> dict:
+    """Put the demo back the way it started: policy and repo access from role.yaml, every
+    role.yaml person active on their level's models and budget with spend back to zero,
+    temporary access ended, people added during the demo removed. The gateway's own total
+    budget (gateway/config.yaml) is not touched: nothing here can raise the ceiling."""
+    admin = _require_govern(body.person)
+    _load_members(force=True)
+    steps, failed = [], []
+    for g in access.all_active():
+        try:
+            access.end(g["person"], admin["id"], "revoked")
+        except Exception:
+            failed.append(f"end temporary access for {g['person']}")
+    removed = 0
+    for m in services.list_members():
+        if m.get("status", "active") == "active":
+            try:
+                services.key_block(m["id"], True)
+                services.update_member(m["id"], status="removed", removed_by=admin["id"])
+                removed += 1
+            except Exception:
+                failed.append(f"remove {m['id']}")
+    services.save_policy({}, admin["id"])
+    services.save_access({}, admin["id"])
+    roles.set_overrides({})
+    roles.set_access({})
+    _load_members(force=True)
+    for p in roles.config()["people"]:
+        person, lvl = roles.person(p["id"]), roles.config()["levels"][p["level"]]
+        try:
+            services.key_update(p["id"], models=roles.person_models(person), max_budget=lvl["budget_usd"], spend=0,
+                                **{k: lvl[k] for k in ("rpm_limit", "tpm_limit") if lvl.get(k)})
+            services.key_block(p["id"], False)
+        except Exception:
+            LOG.exception("demo reset: key for %s", p["id"])
+            failed.append(f"reset the key for {p['name']}")
+    steps = ["Policy and repo access back to role.yaml",
+             f"{len(roles.config()['people'])} people active on their level's models and budget, spend back to $0",
+             "Temporary access ended", f"{removed} people added during the demo removed (keys blocked)",
+             "The gateway's total budget is unchanged"]
+    services.audit("demo_reset", admin["id"], "govern", "Demo reset: " + "; ".join(steps[:4]),
+                   failed=failed, version=roles.version())
+    _invalidate()
+    return {"steps": steps, "failed": failed}
+
+
 # --- Govern: repo access (who may ask about and work on which repository) -----------------
 
 def _access_view() -> dict:
@@ -755,6 +859,9 @@ def sync_repo(project: str, body: PersonIn) -> dict:
     _require_govern(body.person)
     if project not in roles.projects():
         raise HTTPException(404, f"unknown repository {project}")
+    last = agents.checked_at(project)
+    if last and time.time() - last < SYNC_COOLDOWN:
+        raise HTTPException(429, f"Checked {int(time.time() - last)} s ago; try again in a few seconds")
     result = agents.sync_project(project, force=True)
     _invalidate()
     return {"sync": result, **_access_view()}
@@ -1060,6 +1167,10 @@ def add_member(body: MemberIn) -> dict:
     Manager, and add them to RoleSpace. Build-level workspaces are queued for the Coder VM."""
     admin = _require_govern(body.person)
     _load_members(force=True)
+    active = [x for x in services.list_members() if x.get("status", "active") == "active"]
+    if len(active) >= MAX_MEMBERS:
+        raise HTTPException(409, f"This demo allows {MAX_MEMBERS} added people; remove one first. Each person is "
+                                 "another budgeted gateway key, and the gateway's total budget caps them all.")
     m = body.model_dump(exclude={"person"})
     m.update(email=m["email"].strip().lower(), name=m["name"].strip(), title=m["title"].strip())
     errors = roles.validate_member(m)

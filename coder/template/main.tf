@@ -121,6 +121,19 @@ module "code-server" {
   order        = 90
 }
 
+# Google Antigravity, the desktop IDE, opens the same workspace over Coder's remote extension.
+# Its built-in agent signs in with the developer's own Google account, so its model calls do not
+# go through the RoleSpace gateway; Gemini CLI in the workspace does.
+module "antigravity" {
+  count        = data.coder_workspace.me.start_count
+  source       = "registry.coder.com/coder/antigravity/coder"
+  version      = "1.0.2"
+  agent_id     = coder_agent.main.id
+  folder       = "/home/coder/projects"
+  display_name = "Antigravity"
+  order        = 3
+}
+
 # The Projects page: every repo as a row, with its VS Code and Gemini CLI side by side.
 resource "coder_app" "projects" {
   agent_id     = coder_agent.main.id

@@ -12,3 +12,4 @@ jobs:
       - run: pip install -r requirements.txt
       - run: ./snapshot_repo.sh          # the demo codebase the citation tests read
       - run: python tests/test_core.py
+      - run: python tests/test_website.py   # the public website's lookup, limits and headers

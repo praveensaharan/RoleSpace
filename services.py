@@ -203,7 +203,7 @@ def audit(kind: str, person: str, level: str, detail: str, **extra) -> None:
     """kind: refused_change | edit_denied | tool_denied | injection_ignored | edit_previewed |
     pr_opened | budget_changed | access_suspended | access_restored | access_requested |
     elevation_granted | elevation_denied | elevation_ended | request_updated | policy_changed |
-    policy_reset | policy_synced | repo_access_changed"""
+    policy_reset | policy_synced | repo_access_changed | demo_reset"""
     with _audit_lock:
         if _chain["head"] is None:
             latest = next((e for e in _docs("audit", 50) if e.get("hash")), None)
@@ -440,6 +440,10 @@ def _gh_read(repo: str, path: str, accept: str, timeout: float) -> httpx.Respons
     if r.status_code >= 400:
         raise UpstreamError(f"GitHub {path.split('?')[0]} for {repo}: {r.status_code} {r.text[:120]}")
     return r
+
+
+def github_list(repo: str, path: str) -> list:
+    return _gh_read(repo, path, "application/vnd.github+json", 15).json()
 
 
 def github_head(repo: str) -> str:

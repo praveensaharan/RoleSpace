@@ -43,4 +43,21 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 systemctl enable --now gateway-relay
+
+# Workspace containers must not reach the metadata server: it would hand them this VM's Google
+# identity. The relay runs on the host, outside Docker, so it keeps working.
+cat > /etc/systemd/system/rolespace-metadata-block.service <<'UNIT'
+[Unit]
+Description=Keep workspace containers away from the VM metadata server (its Google identity)
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c "iptables -C DOCKER-USER -d 169.254.169.254 -p tcp -j REJECT 2>/dev/null || iptables -I DOCKER-USER -d 169.254.169.254 -p tcp -j REJECT"
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now rolespace-metadata-block
 echo "setup done: coder $(coder --version | head -1)"

@@ -420,3 +420,14 @@ ol.numbered b { color: var(--ink); font-weight: 600; } ol.numbered span { color:
   background: var(--surface-card); color: var(--ink); font-size: 12px; font-weight: 500; }
 .rc-sync { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rc-sync a.mono { color: var(--ink); font-size: 12px; }
+
+/* issues & pull requests */
+.gh-list { list-style: none; margin: 0; padding: 0; }
+.gh-list li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-bottom: 1px solid var(--hairline-soft); }
+.gh-list li:last-child { border-bottom: 0; }
+.gh-list .badge { flex: none; margin-top: 1px; }
+.gh-main { min-width: 0; flex: 1; } .gh-main > a { color: var(--ink); font-weight: 600; font-size: 14px; }
+.gh-main > div { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.badge.merged { background: color-mix(in srgb, var(--badge-violet) 14%, white); color: #6d28d9; border-color: color-mix(in srgb, var(--badge-violet) 30%, white); }
+.gh-label { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: var(--r-pill); font-size: 11.5px; font-weight: 500;
+  background: color-mix(in srgb, var(--c) 18%, white); color: color-mix(in srgb, var(--c) 70%, black); border: 1px solid color-mix(in srgb, var(--c) 40%, white); }

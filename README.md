@@ -9,6 +9,7 @@ Built for the **AI Builder Cup 2026** (theme: *Future of Work & Enterprise Produ
 | | |
 |---|---|
 | Live app | https://rolespace.duckdns.org (sign in with Google, then pick a persona) |
+| Website | https://www.rolespace.duckdns.org (public, interactive product tour) |
 | Demo video (3 min) | *add the link* |
 | Submission deck | [docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx](docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx) · [design deck (PDF)](docs/deck/RoleSpace-deck.pdf) |
 
@@ -87,12 +88,20 @@ Every decision can explain itself. The person who was blocked sees each check in
 - **Tamper-evident audit:** each event carries the hash of the one before. A one-click evidence pack (JSON or CSV) is mapped to SOC 2 and ISO 27001.
 - **Govern screens:** overview, spend pace per person, impact numbers, and a live architecture view.
 
-Added in the code after the demo was filmed. These reach the live app with the next deploy:
+Enterprise controls:
 - **Usage tracking:** tokens and cost per person, model, project and source (assistant or workspace), daily tokens per model, each person's budget and rate limits, and a CSV export.
 - **Rate limits per level:** requests and tokens per minute on every key, next to the budget.
 - **Model choice:** a model catalog in `role.yaml` (Gemini now; Claude on Vertex AI and OpenAI ready to switch on). Each level lists its models, and a person picks one of theirs in the assistant. Their key enforces the same list.
 - **Onboarding:** an admin adds a person by work email, with their level, projects, models and budget. RoleSpace creates their key, stores it in Secret Manager and logs it. **Remove** blocks the key at once.
 - **Changes:** people without a GitHub account follow their pull requests (checks, review, merged) inside RoleSpace. The commit is in their name, since they reviewed the change before opening it.
+- **Several repositories:** each project in `role.yaml` is a repository with its owning team. Only the projects marked for pull requests accept edits.
+- **Repo access:** Govern → Repo access decides who can ask about and work on each repository. Every change goes into the audit log.
+- **Issues & PRs:** open issues and recent pull requests, live from GitHub, for the repositories a person can access.
+- **Policy form:** Govern → Policy changes each level's models, budget and rate limits without editing YAML, then pushes the change to every key.
+- **Saved chats:** a History window reopens earlier chats, which are kept per browser for 30 days.
+- **Workspaces per repository:** a Build workspace clones only the person's repositories, with VS Code and Gemini CLI for each, and opens in the Antigravity desktop IDE too.
+- **Public website:** an interactive product tour at https://www.rolespace.duckdns.org, with "Log in to your organization" by work email.
+- **Spending guardrails:** budgets and rate limits per key, one ceiling for all AI, and a project-wide hard stop (`billing_cap/`, in dry-run).
 
 Screenshots are in [docs/screenshots](docs/screenshots).
 
@@ -126,14 +135,15 @@ The sample is small, and the checker proves where a citation points, not that th
 
 | Service | Used for |
 |---|---|
-| Gemini 3.8 Flash and 3.1 Pro on Vertex AI | All answers and edits, called only through the gateway |
+| Gemini 3.8 Flash and 3.1 Pro on Vertex AI, plus Kimi K2 and Qwen3 Coder from Model Garden | All answers and edits, called only through the gateway |
 | Agent Development Kit (ADK) 2.12 | The Ask and Suggest agents, one per request, with tools chosen by level |
-| Cloud Run | The RoleSpace app (FastAPI) and the LiteLLM model gateway |
+| Cloud Run | The RoleSpace app (FastAPI), the LiteLLM model gateway, the public website and the spending kill switch |
 | Cloud SQL (Postgres 16) | Gateway keys, budgets and spend |
 | Firestore | Audit chain, requests, temporary grants, answer log |
 | Secret Manager | Every key and token |
 | Identity-Aware Proxy and an HTTPS load balancer | Google sign-in for the app, and the TCP tunnel to Coder |
 | Compute Engine, VPC and Cloud NAT | The Coder VM in a private subnet with no public IP |
+| Cloud Billing budgets and Pub/Sub | A project-wide spending cap that can switch billing off (`billing_cap/`) |
 
 ## Repository layout
 
@@ -143,6 +153,8 @@ role.yaml                                              the policy: levels, peopl
 static/                                                the web app (vanilla JS, strict CSP)
 gateway/                                               LiteLLM config and image; provision_keys.py
 coder/                                                 Coder VM setup, workspace image, template, relay
+website/                                               the public website: static pages and a work-email → workspace lookup
+billing_cap/                                           the project-wide spending kill switch (Cloud Run + Pub/Sub)
 tests/test_core.py                                     allow-list, explain, citations, audit chain
 eval/                                                  evaluation script and results
 docs/architecture/                                     flow diagrams and four high-level design pages
@@ -177,7 +189,7 @@ docs/enterprise-design.md                              usage, models, onboarding
   - policy changes through pull requests, with a preview of who gains or loses access;
   - Ask from Slack and Teams, with requests flowing into Jira or Linear;
   - cost per outcome;
-  - more teams and repositories, sessions in Firestore, and a scoped admin key.
+  - a scoped admin key in place of the gateway's master key, and more than one app instance.
 
 **Where RoleSpace fits:**
 - Coding assistants license developer seats.

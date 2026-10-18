@@ -9,6 +9,9 @@ Gemini CLI asks for Google's own model IDs (its Auto mode picks them itself, e.g
 gemini-3.8-flash or gemini-3.1-pro-preview), while the gateway serves stable names that each
 person's key lists. The relay maps one to the other in the URL; the key still decides, so a
 level without a Pro model still gets a 403 for a Pro request.
+
+Only model calls pass: Gemini's API (/v1beta/models/...) and OpenAI-style chat. Admin routes,
+the LiteLLM UI and everything else get a 403 here, before they reach the gateway.
 """
 
 import http.client
@@ -29,6 +32,7 @@ SKIP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
 
 GATEWAY_MODELS = {"gemini-flash", "gemini-pro"}
 MODEL_IN_PATH = re.compile(r"(/models/)([^/:?]+)")
+ALLOWED = re.compile(r"^/(v1beta|v1)/models(/[^/?]+)?([:?].*)?$|^/(v1/)?chat/completions(\?.*)?$")
 
 _token, _expires, _lock = "", 0.0, threading.Lock()
 
@@ -59,6 +63,14 @@ class Relay(http.server.BaseHTTPRequestHandler):
 
     def relay(self) -> None:
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        if not ALLOWED.match(self.path) or ".." in self.path or "%2" in self.path.lower() or "%5c" in self.path.lower():
+            msg = b'{"error": {"message": "Only model calls go through this relay", "code": 403}}'
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(msg)))
+            self.end_headers()
+            self.wfile.write(msg)
+            return
         headers = {k: v for k, v in self.headers.items() if k.lower() not in SKIP}
         headers["X-Serverless-Authorization"] = "Bearer " + id_token()
         upstream = http.client.HTTPSConnection(HOST, timeout=600)

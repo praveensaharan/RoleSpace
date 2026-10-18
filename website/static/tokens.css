@@ -1,0 +1,38 @@
+/* RoleSpace design tokens, from ~/brainstrom/design.md (one look for the app, diagrams and deck).
+   Display type: Inter 600 with negative tracking (stands in for the licensed Cal Sans).
+   Fonts are self-hosted (OFL): set --font-path before importing if the fonts folder sits elsewhere. */
+@font-face { font-family: "Inter"; src: url("fonts/Inter.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono.woff2") format("woff2"); font-weight: 100 800; font-display: swap; }
+
+:root {
+  /* brand and accent */
+  --primary: #111111;          --primary-active: #242424;
+  --brand-accent: #3b82f6;     /* sparingly: inline links, the approved-change path */
+  --badge-orange: #fb923c;     --badge-pink: #ec4899;
+  --badge-violet: #8b5cf6;     --badge-emerald: #34d399;
+  /* surface */
+  --canvas: #ffffff;           --surface-soft: #f8f9fa;     --surface-card: #f5f5f5;
+  --surface-strong: #e5e7eb;   --surface-dark: #101010;     --surface-dark-elevated: #1a1a1a;
+  --hairline: #e5e7eb;         --hairline-soft: #f3f4f6;
+  /* text */
+  --ink: #111111;              --body: #374151;             --muted: #6b7280;
+  --muted-soft: #898989;       --on-primary: #ffffff;       --on-dark-soft: #a1a1aa;
+  /* semantic */
+  --success: #10b981;          --warning: #f59e0b;          --error: #ef4444;
+  /* RoleSpace levels map onto the badge pastels */
+  --ask: var(--badge-emerald); --suggest: var(--badge-violet);
+  --build: var(--badge-orange); --govern: var(--brand-accent);
+  /* type */
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* shape and space */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px; --r-pill: 9999px;
+  --s-xxs: 4px; --s-xs: 8px; --s-sm: 12px; --s-md: 16px; --s-lg: 24px; --s-xl: 32px; --s-xxl: 48px; --s-section: 96px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.05); --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+}
+/* display scale: 600 weight, negative tracking */
+.display-xl { font: 600 64px/1.05 var(--font-display); letter-spacing: -2px; }
+.display-lg { font: 600 48px/1.1 var(--font-display); letter-spacing: -1.5px; }
+.display-md { font: 600 36px/1.15 var(--font-display); letter-spacing: -1px; }
+.display-sm { font: 600 28px/1.2 var(--font-display); letter-spacing: -0.5px; }

@@ -81,7 +81,7 @@ People without a GitHub account can't push, merge or approve. The bot's token co
 - **Answering review comments from RoleSpace.** The person reads the reviewer's comments on the Changes page and asks the assistant to revise. The agent pushes a follow-up commit to the same branch, inside the same allow-list.
 - **GitLab, Bitbucket and Azure DevOps.** The same flow through each one's merge-request API, for example GitLab's `POST /projects/:id/merge_requests` with a project access token. `open_pr` and `pr_status` in `services.py` are the only code that would change.
 
-## 4. Choosing models: Gemini, Claude, OpenAI
+## 4. Choosing models: Gemini, Kimi, Qwen, Claude, OpenAI
 
 ### Built
 
@@ -90,13 +90,15 @@ People without a GitHub account can't push, merge or approve. The bot's token co
   - `available`: it needs a one-time step first, which the catalog's note describes.
 - **Who gets which model.** Each level lists the models it may use. At onboarding the admin can narrow that list for one person.
 - **Picking a model.** The assistant has a model picker that shows only the person's models. The server checks the choice again (`pick_model`) and falls back to the level's default. The person's gateway key holds the same list, so even a direct call with the key can't reach another model.
-- **Where admins see it.** Govern → Policy shows the catalog, and Govern → Usage splits tokens and cost by model.
+- **Where admins change it.** Govern → Policy has a form: switch a model on, tick the levels that may use it, then push the change to every key. Govern → Usage splits tokens and cost by model.
 
 | Model | Status | How to switch it on |
 |---|---|---|
 | Gemini 3.8 Flash, Gemini 3.1 Pro | enabled | – |
-| Claude Opus 5.5 (Anthropic on Vertex AI) | available | Enable Claude in Vertex AI Model Garden. Uncomment `claude-opus` in `gateway/config.yaml` (`vertex_ai/claude-opus-5-5`, location `global`) and add it to a level's `models`. Then run `gateway/provision_keys.py`. Billing goes through Google Cloud, and the gateway's service account is the only caller, as with Gemini. |
-| OpenAI (for example a Codex model) | available | Store the customer's OpenAI API key as the secret `openai-api-key`, mounted on the gateway as `OPENAI_API_KEY`. Uncomment `openai-codex` in `gateway/config.yaml` with the model id. Prompts leave Google Cloud, so check data-residency rules first. |
+| Kimi K2 Thinking, Qwen3 Coder 480B (Vertex AI Model Garden) | enabled | Already served by the gateway, with per-token prices pinned in `gateway/config.yaml` so spend is logged correctly. |
+| DeepSeek V3.2 (Vertex AI Model Garden) | available | Served by the gateway; switch it on for a level in Govern → Policy. |
+| Claude on Vertex AI (Sonnet, Opus) | needs setup | Enable Claude in Vertex AI Model Garden and get quota, uncomment `claude-sonnet` in `gateway/config.yaml`, redeploy the gateway, then add it to the catalog. Billing goes through Google Cloud, and the gateway's service account is the only caller. |
+| OpenAI (for example a Codex model) | needs setup | Store the customer's OpenAI API key as the secret `openai-api-key`, mounted on the gateway as `OPENAI_API_KEY`. Uncomment `openai-codex` in `gateway/config.yaml` with the model id. Prompts leave Google Cloud, so check data-residency rules first. |
 
 **Before enabling a model for a level, re-run the evaluation with it.** Tool calling and citation quality vary between models.
 

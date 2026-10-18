@@ -27,7 +27,7 @@ gcloud sql users create litellm --instance=rs-sql --password="$DB_PASSWORD"
 
 # The gateway's service account: the only one with the Vertex AI role
 gcloud iam service-accounts create rs-gateway
-for r in roles/aiplatform.user roles/cloudsql.client roles/secretmanager.secretAccessor; do
+for r in roles/aiplatform.user roles/cloudsql.client; do
   gcloud projects add-iam-policy-binding $PROJECT \
     --member="serviceAccount:rs-gateway@$PROJECT.iam.gserviceaccount.com" --role="$r"
 done
@@ -38,12 +38,23 @@ Store the secrets the gateway reads:
 - `litellm-salt-key`
 - `litellm-database-url`, in the form `postgresql://litellm:PASSWORD@localhost/litellm?host=/cloudsql/PROJECT:REGION:rs-sql`
 
+Grant the gateway those three secrets only, one binding per secret, not Secret Manager access for the whole project:
+
+```bash
+for s in litellm-master-key litellm-salt-key litellm-database-url; do
+  gcloud secrets add-iam-policy-binding $s --role=roles/secretmanager.secretAccessor \
+    --member="serviceAccount:rs-gateway@$PROJECT.iam.gserviceaccount.com"
+done
+```
+
 Then deploy [`gateway/`](../gateway):
 - Use `--service-account rs-gateway@…` and `--add-cloudsql-instances $PROJECT:$REGION:rs-sql`.
 - Set `LITELLM_MASTER_KEY`, `LITELLM_SALT_KEY` and `DATABASE_URL` from those secrets, and `GOOGLE_CLOUD_PROJECT=$PROJECT`.
 - Use `--no-allow-unauthenticated`, 1 CPU, 2 GiB, one instance, and keep the CPU always allocated.
 
 Callers send a Google ID token in `X-Serverless-Authorization` and the LiteLLM key in `Authorization`.
+
+`gateway/config.yaml` also sets one ceiling for all AI spend together (`max_budget: 25`, `budget_duration: 30d`). Past it, the gateway refuses every call, whatever each person's budget says. Only a gateway redeploy changes it.
 
 Give each person a key, with their level's models and budget, limited to model routes:
 
@@ -87,12 +98,19 @@ Open Coder with [`coder/tunnel.sh`](../coder/tunnel.sh), which runs an IAP tunne
 
 ```bash
 gcloud iam service-accounts create rolespace-run
-for r in roles/datastore.user roles/secretmanager.secretAccessor roles/logging.logWriter roles/compute.viewer; do
-  gcloud projects add-iam-policy-binding $PROJECT \
-    --member="serviceAccount:rolespace-run@$PROJECT.iam.gserviceaccount.com" --role="$r"
+SA=serviceAccount:rolespace-run@$PROJECT.iam.gserviceaccount.com
+for r in roles/datastore.user roles/logging.logWriter roles/compute.viewer; do
+  gcloud projects add-iam-policy-binding $PROJECT --member=$SA --role="$r"
 done
-gcloud run services add-iam-policy-binding rs-gateway --region=$REGION \
-  --member="serviceAccount:rolespace-run@$PROJECT.iam.gserviceaccount.com" --role=roles/run.invoker
+gcloud run services add-iam-policy-binding rs-gateway --region=$REGION --member=$SA --role=roles/run.invoker
+
+# Secrets: one binding per secret the app reads, plus the people's own keys (gw-key-*)
+for s in litellm-master-key github-token demo-admin-passcode; do
+  gcloud secrets add-iam-policy-binding $s --member=$SA --role=roles/secretmanager.secretAccessor
+done
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding $PROJECT --member=$SA --role=roles/secretmanager.secretAccessor \
+  --condition="expression=resource.name.startsWith('projects/$PROJECT_NUMBER/secrets/gw-key-'),title=gw-key secrets only"
 ```
 
 The app also needs these secrets:
@@ -114,6 +132,41 @@ To put the app behind Google sign-in:
 If your project isn't in a Google Cloud organization, or users sign in with accounts from outside it, IAP needs a **custom OAuth client**:
 1. In **Google Auth Platform → Branding**, set the audience to **External**, then publish the app or add test users.
 2. In **IAP → Settings**, choose **Custom OAuth** and **Auto Generate Credentials**.
+
+## 5. The public website (optional)
+
+[`website/`](../website) is the public product site: static pages plus one lookup that turns a work email into its organization's workspace. It runs as its own Cloud Run service with a service account that has no roles at all.
+
+```bash
+gcloud iam service-accounts create rolespace-site     # no roles: the site reads nothing in the project
+cd website && gcloud run deploy rolespace-site --source . --region=$REGION --allow-unauthenticated \
+  --service-account=rolespace-site@$PROJECT.iam.gserviceaccount.com --min-instances=0 --max-instances=3 \
+  --memory=256Mi --set-env-vars="^@^TRUSTED_PROXIES=LB_IP/32,35.191.0.0/16,130.211.0.0/22"
+```
+
+- Map your company's email domains to workspace URLs in [`website/orgs.json`](../website/orgs.json). The lookup only ever returns URLs listed there.
+- `TRUSTED_PROXIES` lists the load balancer's IP and Google's front-end ranges. The rate limit (20 lookups a minute) then counts each visitor, not the load balancer.
+
+To serve it as `www.` on the same load balancer as the app, add a second backend without IAP, a certificate and a host rule. The app's own host and default route don't change.
+
+```bash
+gcloud compute network-endpoint-groups create rolespace-site-neg --region=$REGION \
+  --network-endpoint-type=serverless --cloud-run-service=rolespace-site
+gcloud compute backend-services create rolespace-site-backend --global --load-balancing-scheme=EXTERNAL_MANAGED
+gcloud compute backend-services add-backend rolespace-site-backend --global \
+  --network-endpoint-group=rolespace-site-neg --network-endpoint-group-region=$REGION
+gcloud compute ssl-certificates create rolespace-www-cert --global --domains=www.YOUR_DOMAIN
+gcloud compute target-https-proxies update rolespace-https-proxy --global \
+  --ssl-certificates=rolespace-cert,rolespace-www-cert
+gcloud compute url-maps add-path-matcher rolespace-urlmap --global --path-matcher-name=site \
+  --default-service=rolespace-site-backend --new-hosts=www.YOUR_DOMAIN
+```
+
+The certificate goes active 15–60 minutes after `www.YOUR_DOMAIN` points at the load balancer.
+
+## 6. A hard spending cap (optional)
+
+[`billing_cap/`](../billing_cap) stops the whole project when the month's spend nears a set amount. The billing budget publishes its spend to Pub/Sub, and a small Cloud Run service unlinks billing at the stop line. It starts in dry-run, logging what it would do. Its [README](../billing_cap/README.md) has the commands, and the trade-off: unlinking billing stops everything in the project, and turning it back on is manual.
 
 ## Onboarding new people
 
@@ -141,16 +194,20 @@ After you change `rpm_limit` or `tpm_limit` in `role.yaml`, run `python gateway/
 
 ## More models
 
-`role.yaml` lists every model in its `models:` catalog. Models marked `available` need one step before an admin switches them on:
+`role.yaml` lists every model in its `models:` catalog.
+- **Live today:** Gemini 3.8 Flash and 3.1 Pro, plus Kimi K2 and Qwen3 Coder from Vertex AI Model Garden.
+- **Served but switched off:** DeepSeek V3.2. An admin can switch it on per level in Govern → Policy, then **Push to keys**.
+- **Pinned prices:** `gateway/config.yaml` sets a per-token price for each Model Garden partner model, because LiteLLM 1.105.1 would otherwise log their spend as $0.
+
+Models that need a one-time step first:
 - **Claude on Vertex AI:**
-  1. Enable the model in Vertex AI Model Garden.
-  2. Uncomment `claude-opus` in `gateway/config.yaml` and redeploy the gateway.
-  3. Set its status to `enabled` and add it to a level's `models`.
-  4. Run `gateway/provision_keys.py`.
+  1. Enable the model in Vertex AI Model Garden and make sure the project has quota.
+  2. Uncomment `claude-sonnet` in `gateway/config.yaml` and redeploy the gateway.
+  3. Add it to the `models:` catalog in `role.yaml`, then switch it on per level in Govern → Policy.
 - **OpenAI:**
   1. Store the customer's key as the secret `openai-api-key` and mount it on the gateway as `OPENAI_API_KEY`.
   2. Uncomment `openai-codex` in `gateway/config.yaml`, with the model id.
-  3. Then follow steps 3 and 4 above.
+  3. Then follow step 3 above.
 
 Re-run the evaluation with a model before enabling it for a level. See [enterprise-design.md](enterprise-design.md) for the full design.
 

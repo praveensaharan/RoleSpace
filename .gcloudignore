@@ -8,6 +8,8 @@ __pycache__/
 /deploy.sh
 /eval/
 /tests/
+/billing_cap/
+/website/
 /docs/
 /.github/
 /README.md

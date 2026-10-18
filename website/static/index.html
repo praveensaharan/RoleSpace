@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RoleSpace · Every role gets the right AI. The company keeps control.</title>
+<meta name="description" content="RoleSpace gives product managers, designers and developers the AI their job needs, under one policy for models, repositories, budgets and review. Built on Google Cloud.">
+<meta property="og:title" content="RoleSpace · Every role gets the right AI">
+<meta property="og:description" content="One policy for AI models, repositories, budgets and review, from a PM's question to a developer's workspace.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/Inter.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M14 9l2 2"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M18 9c0 5-6 4-11 9"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-3.5 3.2-5.5 6.5-5.5s6 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14.8c2 .7 3.3 2.5 3.5 5.2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 00.5-8 6 6 0 00-11.4 1.5A3.3 3.3 0 007 18z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></symbol>
+  <symbol id="i-chain" viewBox="0 0 24 24"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></symbol>
+  <symbol id="i-pr" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v10M18 17V9a3 3 0 00-3-3h-4M13 3l-2 3 2 3"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 16a8 8 0 1116 0"/><path d="M12 16l4-5"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V5l8-2v18M12 7h8v14M8 8v.01M8 12v.01M8 16v.01M16 11v.01M16 15v.01M2 21h20"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 00-1.3-3.2 4.2 4.2 0 00-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 00-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 00-.1 3.2A4.6 4.6 0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="top">
+  <div class="wrap nav-row">
+    <a class="logo" href="#top" aria-label="RoleSpace home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>RoleSpace</a>
+    <nav class="links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#try">Try it</a>
+      <a href="#access">Models &amp; repos</a>
+      <a href="#usage">Usage</a>
+      <a href="#roi">ROI</a>
+      <a href="#compare">Compare</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="text-link hide-sm" href="https://github.com/praveensaharan/RoleSpace" rel="noopener" target="_blank">GitHub</a>
+      <button class="btn primary" data-login><svg class="i"><use href="#i-building"/></svg><span class="long">Log in to your organization</span><span class="short">Log in</span></button>
+      <button class="icon-btn menu-btn" aria-label="Open menu" aria-expanded="false" data-menu><svg class="i"><use href="#i-menu"/></svg></button>
+    </div>
+  </div>
+  <nav class="sheet" aria-label="Menu" hidden>
+    <a href="#how">How it works</a><a href="#try">Try it</a><a href="#access">Models &amp; repos</a><a href="#usage">Usage</a>
+    <a href="#roi">ROI</a><a href="#integrate">Integration</a><a href="#compare">Compare</a><a href="#faq">FAQ</a>
+    <a href="https://github.com/praveensaharan/RoleSpace" rel="noopener" target="_blank">GitHub</a>
+  </nav>
+</header>
+
+<main id="main">
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="badge"><span class="dot govern"></span>AI governance for software teams · built on Google Cloud</span>
+      <h1 class="display-xl">Every role gets the right AI. <span class="soft">The company keeps control.</span></h1>
+      <p class="lead">RoleSpace gives product managers, designers and developers the AI help their job needs, from checked answers and safe edits to a full coding workspace. One policy decides models, repositories, budgets and review for everyone.</p>
+      <div class="cta-row">
+        <button class="btn primary lg" data-login><svg class="i"><use href="#i-building"/></svg>Log in to your organization</button>
+        <a class="btn secondary lg" href="#how">See how it works<svg class="i"><use href="#i-down"/></svg></a>
+      </div>
+      <ul class="proof">
+        <li><svg class="i"><use href="#i-check"/></svg>Runs in your own Google Cloud project</li>
+        <li><svg class="i"><use href="#i-check"/></svg>Google sign-in, no VPN</li>
+        <li><svg class="i"><use href="#i-check"/></svg>Every decision explained and logged</li>
+      </ul>
+    </div>
+    <div class="hero-card" aria-label="Interactive product preview">
+      <div class="win-bar"><span></span><span></span><span></span><b>RoleSpace · FirstRound workspace</b></div>
+      <div class="pill-group persona-tabs" role="tablist" aria-label="Choose a person">
+        <button role="tab" data-persona="maya" class="on"><span class="dot ask"></span>Maya · PM</button>
+        <button role="tab" data-persona="leo"><span class="dot suggest"></span>Leo · Design</button>
+        <button role="tab" data-persona="sam"><span class="dot build"></span>Sam · Dev</button>
+        <button role="tab" data-persona="ava"><span class="dot govern"></span>Ava · Admin</button>
+      </div>
+      <div class="scene" id="scene" aria-live="polite"></div>
+      <div class="scene-foot" id="scene-foot"></div>
+    </div>
+  </div>
+  <div class="wrap logos-strip">
+    <span>Models you can switch on</span>
+    <ul>
+      <li><img src="/assets/logos/googlegemini.svg" alt="" width="22" height="22">Gemini</li>
+      <li><img src="/assets/logos/kimi.svg" alt="" width="22" height="22">Kimi K2</li>
+      <li><img src="/assets/logos/qwen.svg" alt="" width="22" height="22">Qwen3 Coder</li>
+      <li><img src="/assets/logos/deepseek.svg" alt="" width="22" height="22">DeepSeek</li>
+      <li><img src="/assets/logos/claude.svg" alt="" width="22" height="22">Claude</li>
+      <li class="via"><img src="/assets/logos/googlecloud.svg" alt="" width="22" height="22">all on Vertex AI</li>
+    </ul>
+  </div>
+</section>
+
+<section class="impact">
+  <div class="wrap">
+    <div class="impact-grid">
+      <div class="big reveal"><b data-count="61" data-suffix="%">0</b><p>of developers spend more than 30 minutes a day searching for answers.<sup>1</sup></p></div>
+      <div class="big reveal"><b data-count="55" data-suffix="%">0</b><p>faster on a coding task with an AI pair programmer, in a controlled study.<sup>2</sup></p></div>
+      <div class="big reveal"><b data-count="92" data-suffix="/92">0</b><p>RoleSpace citations verified against the lines the assistant read.<sup>3</sup></p></div>
+      <div class="big reveal"><b data-count="1" data-prefix="≈" data-suffix="¢">0</b><p>model cost per answered question, measured on RoleSpace.<sup>3</sup></p></div>
+    </div>
+    <p class="fine sources"><sup>1</sup> <a href="https://survey.stackoverflow.co/2024/professional-developers" rel="noopener" target="_blank">Stack Overflow Developer Survey 2024</a> · <sup>2</sup> <a href="https://github.blog/news-insights/research/research-quantifying-github-copilots-impact-on-developer-productivity-and-happiness/" rel="noopener" target="_blank">GitHub research, 95 developers, one task</a> · <sup>3</sup> RoleSpace evaluation on the running product, 17 Oct 2026: 10/10 questions, 10/10 attacks stopped, 12 s median answer</p>
+  </div>
+</section>
+
+<section class="band soft" id="how">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">How it works</span>
+      <h2 class="display-lg">Four levels. One policy.</h2>
+      <p class="sub">Each person gets a level from their team. The level decides their AI tools, the code they may change, the models they may call and what they may spend. Pick a person to see exactly what they can reach.</p>
+    </div>
+    <div class="graph-card mock reveal">
+      <div class="pill-group graph-tabs" id="graph-tabs" role="tablist" aria-label="Pick a person"></div>
+      <div class="graph-wrap"><svg id="graph-svg" viewBox="0 0 1120 520" role="img" aria-labelledby="graph-caption"></svg></div>
+      <p class="graph-caption" id="graph-caption" aria-live="polite"></p>
+    </div>
+    <div class="levels compact">
+      <article class="level reveal" data-level="ask"><span class="chip ask">Ask</span><h3>Checked answers</h3><p>Questions about the code; every citation is checked. No writes.</p><span class="who">PMs, analysts, support</span></article>
+      <article class="level reveal" data-level="suggest"><span class="chip suggest">Suggest</span><h3>Safe edits as pull requests</h3><p>Small changes inside an allow-list, reviewed by a human.</p><span class="who">Designers, writers, QA</span></article>
+      <article class="level reveal" data-level="build"><span class="chip build">Build</span><h3>A private workspace</h3><p>VS Code and Gemini CLI with only their repositories.</p><span class="who">Developers</span></article>
+      <article class="level reveal" data-level="govern"><span class="chip govern">Govern</span><h3>Control and evidence</h3><p>Budgets, approvals, usage, a kill switch and the audit log.</p><span class="who">Platform and security admins</span></article>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="try">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Try it</span>
+      <h2 class="display-lg">Who can do what? Ask RoleSpace.</h2>
+      <p class="sub">Pick a person and something they want to do. RoleSpace runs the same checks as production, in order, and explains the decision in plain words.</p>
+    </div>
+    <div class="sim reveal">
+      <div class="sim-controls">
+        <label class="step-label">1 · Who</label>
+        <div class="people" id="sim-people"></div>
+        <label class="step-label">2 · Wants to</label>
+        <div class="actions" id="sim-actions"></div>
+        <p class="sim-caption" id="sim-caption" aria-live="polite"></p>
+      </div>
+      <div class="sim-result mock" aria-live="polite">
+        <div class="mock-head"><svg class="i"><use href="#i-shield"/></svg><b>Policy check</b><span class="muted mono" id="sim-version">role.yaml · 7f1350e</span><button class="btn secondary sm" id="sim-play" aria-pressed="true"><svg class="i"><use href="#i-pause"/></svg><span>Pause</span></button></div>
+        <div class="sim-progress" aria-hidden="true"><i id="sim-bar"></i></div>
+        <ol class="checks" id="sim-checks"></ol>
+        <div class="verdict" id="sim-verdict"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band soft" id="access">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Models &amp; repositories</span>
+      <h2 class="display-lg">The right models and code for each person.</h2>
+      <p class="sub">Switch on Gemini, Kimi K2, Qwen and more from Vertex AI, and decide who may work on which repository. Each person's key enforces the models; workspaces clone only their repositories; every change is logged.</p>
+    </div>
+    <div class="pill-group tabs reveal" role="tablist" aria-label="Models or repositories" id="access-tabs">
+      <button role="tab" class="on" data-panel="models-panel"><svg class="i"><use href="#i-spark"/></svg>Models by level</button>
+      <button role="tab" data-panel="repos-panel"><svg class="i"><use href="#i-branch"/></svg>Repository access</button>
+    </div>
+    <div class="split" id="models-panel">
+      <div class="mock reveal">
+        <div class="mock-head"><svg class="i"><use href="#i-spark"/></svg><b>Models by level</b><span class="muted">click to switch on or off</span></div>
+        <div class="table-wrap"><table class="matrix" id="model-matrix"></table></div>
+      </div>
+      <div class="mock reveal key-card">
+        <div class="mock-head"><svg class="i"><use href="#i-key"/></svg><b>What each key allows now</b></div>
+        <div id="key-preview" class="key-preview"></div>
+      </div>
+    </div>
+    <div class="split" id="repos-panel" hidden>
+      <div class="mock">
+        <div class="mock-head"><svg class="i"><use href="#i-branch"/></svg><b>Repo access</b><span class="muted">click a cell</span></div>
+        <div class="table-wrap"><table class="matrix repo" id="repo-matrix"></table></div>
+      </div>
+      <div class="mock">
+        <div class="mock-head"><svg class="i"><use href="#i-chain"/></svg><b>Audit log</b><span class="muted">each event carries the hash of the one before</span></div>
+        <ol class="audit" id="audit"></ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="collab">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Collaboration</span>
+      <h2 class="display-lg">Changes from people without GitHub accounts.</h2>
+      <p class="sub">A designer asks for a change in plain words. It reaches GitHub as a normal pull request in their name, with a CI check and a code owner's review. Nobody hands out repository access.</p>
+    </div>
+    <div class="flow reveal">
+      <ol class="flow-steps" id="flow-steps">
+        <li data-step="0"><span>1</span>Ask in plain words</li>
+        <li data-step="1"><span>2</span>Review the diff</li>
+        <li data-step="2"><span>3</span>Pull request opened</li>
+        <li data-step="3"><span>4</span>Checked and reviewed</li>
+        <li data-step="4"><span>5</span>Merged</li>
+      </ol>
+      <div class="flow-stage mock" id="flow-stage" aria-live="polite"></div>
+      <div class="flow-controls"><button class="btn secondary" id="flow-play"><svg class="i"><use href="#i-pause"/></svg><span>Pause</span></button><span class="muted small" id="flow-caption"></span></div>
+    </div>
+  </div>
+</section>
+
+<section class="band soft" id="usage">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Usage &amp; cost</span>
+      <h2 class="display-lg">See every token. Cap every dollar.</h2>
+      <p class="sub">Every model call goes through one gateway on the caller's own key, so tokens and cost are counted per person, model and project, and the caps hold even if someone bypasses the app.</p>
+    </div>
+    <div class="split wide-left">
+      <div class="mock reveal dash">
+        <div class="mock-head"><svg class="i"><use href="#i-chart"/></svg><b>Usage</b><span class="live"><i></i>live · sample data</span></div>
+        <div class="kpis">
+          <div><span class="muted">Tokens in</span><b id="k-in">0</b></div>
+          <div><span class="muted">Tokens out</span><b id="k-out">0</b></div>
+          <div><span class="muted">Cost</span><b id="k-cost">$0.00</b></div>
+          <div><span class="muted">Blocked</span><b id="k-blocked">0</b></div>
+        </div>
+        <div class="bars" id="bars" aria-hidden="true"></div>
+        <table class="budgets" id="budgets"></table>
+      </div>
+      <div class="caps reveal">
+        <h3 class="title">Four caps, smallest first</h3>
+        <ol>
+          <li><b>$1–20 a month</b><span>each person's key</span><p>The gateway refuses their next call.</p></li>
+          <li><b>30–120 calls a minute</b><span>each person's key</span><p>A runaway agent loop is slowed down.</p></li>
+          <li><b>One total for all AI</b><span>everyone together</span><p>The gateway refuses every call past it.</p></li>
+          <li class="last"><b>A project-wide hard stop</b><span>the whole cloud project</span><p>Once armed, billing is cut before the limit, so nothing can run up a bill.</p></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="roi">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Return on investment</span>
+      <h2 class="display-lg">What RoleSpace gives back.</h2>
+      <p class="sub">Every question a PM can answer alone, and every small change a designer can make safely, is developer time handed back. Set the numbers for your company.</p>
+    </div>
+    <div class="roi reveal">
+      <div class="roi-inputs mock">
+        <div class="mock-head"><svg class="i"><use href="#i-users"/></svg><b>Your company</b><span class="muted">drag to change</span></div>
+        <div class="estimator" id="roi-inputs"></div>
+      </div>
+      <div class="roi-out">
+        <div class="roi-tiles">
+          <div class="tile hero-tile"><span>Developer hours handed back a year</span><b id="r-hours">0</b><small id="r-fte"></small></div>
+          <div class="tile"><span>Value of that time</span><b id="r-value">$0</b><small>at your hourly cost</small></div>
+          <div class="tile"><span>RoleSpace running cost</span><b id="r-cost">$0</b><small id="r-cost-note"></small></div>
+          <div class="tile"><span>Return on running cost</span><b id="r-roi">0×</b><small id="r-payback"></small></div>
+        </div>
+        <div class="roi-chart mock">
+          <div class="mock-head"><svg class="i"><use href="#i-chart"/></svg><b>Value vs running cost, per year</b><span class="live"><i></i>live</span></div>
+          <div class="vs" id="roi-vs"></div>
+          <div class="ticker"><span>Developer time handed back while you've been on this page, at your numbers</span><b id="r-tick">$0.00</b></div>
+        </div>
+        <details class="how"><summary>How we calculate this</summary>
+          <p>Hours handed back = people using Ask and Suggest × questions a week × 48 weeks × developer minutes per question, plus small changes a month × 12 × developer minutes per change. Running cost = the app, gateway, database and sign-in at list price (about $1,300 a year) plus model calls at about 1¢ a question and 3¢ a change, measured on Gemini Flash. The live counter spreads the yearly value over 48 working weeks of 40 hours. Developers' own coding speed-up isn't counted.</p>
+        </details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band soft" id="integrate">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Enterprise integration</span>
+      <h2 class="display-lg">Fits the way your teams already work.</h2>
+      <p class="sub">RoleSpace runs in your own Google Cloud project and plugs into the sign-in, repositories and review process you already have. A pilot takes days, not a migration.</p>
+    </div>
+    <div class="pill-group tabs reveal" role="tablist" aria-label="Integration steps" id="int-tabs">
+      <button role="tab" class="on" data-tab="0">1 · Sign-in</button>
+      <button role="tab" data-tab="1">2 · Repositories</button>
+      <button role="tab" data-tab="2">3 · Policy</button>
+      <button role="tab" data-tab="3">4 · Onboarding</button>
+      <button role="tab" data-tab="4">5 · Spend</button>
+    </div>
+    <div class="int reveal" id="int-panel" aria-live="polite"></div>
+  </div>
+</section>
+
+<section class="band" id="security">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Security</span>
+      <h2 class="display-lg">Built for the security review.</h2>
+    </div>
+    <div class="sec-grid reveal">
+      <div><svg class="i"><use href="#i-lock"/></svg><b>Google sign-in at the edge</b><p>Identity-Aware Proxy; no VPN, no public IPs on workspaces.</p></div>
+      <div><svg class="i"><use href="#i-key"/></svg><b>A key per person</b><p>Own models, budget and limits; it can call models only.</p></div>
+      <div><svg class="i"><use href="#i-code"/></svg><b>Allow-lists in code</b><p>Checked when proposed, when the PR opens and again in CI.</p></div>
+      <div><svg class="i"><use href="#i-chain"/></svg><b>Tamper-evident audit</b><p>Hash-chained events; evidence mapped to SOC 2 and ISO 27001.</p></div>
+      <div><svg class="i"><use href="#i-shield"/></svg><b>Least privilege</b><p>Only the gateway may call models; one grant per secret.</p></div>
+      <div><svg class="i"><use href="#i-file"/></svg><b>Prompt-injection aware</b><p>Instructions hidden in files are data; unread citations are struck out.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band soft" id="compare">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="eyebrow">Why RoleSpace</span>
+      <h2 class="display-lg">How RoleSpace compares.</h2>
+      <p class="sub">Coding assistants, AI gateways and chat assistants are each good at their own job. RoleSpace is the layer none of them provides: one policy that ties AI to each person's role, from a PM's question to a developer's workspace.</p>
+    </div>
+    <div class="rivals reveal">
+      <article><div class="rival-logo"><img src="/assets/logos/githubcopilot.svg" alt="" width="26" height="26"><b>GitHub Copilot</b></div><p class="what">AI pair programmer, licensed per developer seat.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace adds role levels for PMs and designers, checked citations and allow-listed edits as reviewed PRs.</p></article>
+      <article><div class="rival-logo"><img src="/assets/logos/cursor.svg" alt="" width="26" height="26"><b>Cursor</b></div><p class="what">AI code editor for developers, per seat.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace governs everyone around the editor: repositories, models, budgets and review per person.</p></article>
+      <article><div class="rival-logo"><img src="/assets/logos/windsurf.svg" alt="" width="26" height="26"><b>Windsurf</b> <span class="and">&amp;</span> <img src="/assets/logos/sourcegraph.svg" alt="" width="22" height="22"><b>Cody</b></div><p class="what">AI coding assistants and code search for developers.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace explains every decision with the rule that decided, and keeps a hash-chained record.</p></article>
+      <article><div class="rival-logo"><img src="/assets/logos/openai.svg" alt="" width="26" height="26"><b>ChatGPT Enterprise</b></div><p class="what">A general chat assistant for every employee.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace answers about your code with checked lines, and turns a request into a reviewed change.</p></article>
+      <article><div class="rival-logo"><span class="text-logo">{ }</span><b>LiteLLM · Portkey</b></div><p class="what">AI gateways: keys, budgets and routing.</p><p class="win"><svg class="i"><use href="#i-check"/></svg>RoleSpace builds on a gateway and adds people, repositories, file paths and review on top.</p></article>
+    </div>
+    <div class="table-wrap reveal">
+      <table class="compare">
+        <thead><tr><th></th>
+          <th><img src="/assets/logos/githubcopilot.svg" alt="" width="18" height="18">Copilot</th>
+          <th><img src="/assets/logos/cursor.svg" alt="" width="18" height="18">Cursor</th>
+          <th><img src="/assets/logos/openai.svg" alt="" width="18" height="18">ChatGPT Ent.</th>
+          <th><span class="text-logo sm">{ }</span>AI gateways</th>
+          <th class="us"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>RoleSpace</th></tr></thead>
+        <tbody>
+          <tr><td>Built for PMs and designers, not only developers</td><td class="part">Seat each</td><td class="no">–</td><td class="part">General chat</td><td class="no">–</td><td class="us yes">✓</td></tr>
+          <tr><td>Answers cite exact lines, and each citation is checked</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="us yes">✓</td></tr>
+          <tr><td>Non-developers' edits arrive as reviewed PRs inside an allow-list</td><td class="part">Partly</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="us yes">✓</td></tr>
+          <tr><td>Models, budget and rate limits per person</td><td class="part">Partly</td><td class="part">Partly</td><td class="part">Partly</td><td class="yes">✓</td><td class="us yes">✓</td></tr>
+          <tr><td>Repository and file-path access per person</td><td class="part">Partly</td><td class="part">Partly</td><td class="no">–</td><td class="no">–</td><td class="us yes">✓</td></tr>
+          <tr><td>Every decision explained, with the rule that decided</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="us yes">✓</td></tr>
+          <tr><td>Runs in your own cloud project</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="yes">✓</td><td class="us yes">✓</td></tr>
+          <tr><td>Pay for use, no seat for occasional users</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="yes">✓</td><td class="us yes">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="fine reveal">From public product information, October 2026; products change often. Names and logos belong to their owners and are used only to identify the products. RoleSpace builds on an AI gateway (LiteLLM) rather than replacing one, and developers can keep their favourite tools: any tool that accepts a custom model endpoint can run on a person's RoleSpace key.</p>
+  </div>
+</section>
+
+<section class="band" id="faq">
+  <div class="wrap narrow">
+    <div class="head reveal"><span class="eyebrow">FAQ</span><h2 class="display-lg">Questions buyers ask.</h2></div>
+    <div class="faq reveal">
+      <details><summary>Does our code leave our cloud?</summary><p>RoleSpace runs in your own Google Cloud project. Your repositories are read there, and models are called through Vertex AI in the same project. A model from outside Google Cloud is only used if an admin switches it on with your own key.</p></details>
+      <details><summary>Do designers and PMs need GitHub accounts?</summary><p>No. Their changes are opened as pull requests on their behalf, in their name, and they follow checks and reviews inside RoleSpace. Code owners review in GitHub as usual.</p></details>
+      <details><summary>How do we stop runaway AI spend?</summary><p>Every call uses the person's own key, with a monthly budget and per-minute limits. A total cap covers all AI together, and a project-wide hard stop can cut billing before a set amount.</p></details>
+      <details><summary>How do we add people?</summary><p>An admin adds a person by work email and picks their level, projects, models and budget. RoleSpace creates their key and logs it. Directory sync with Entra ID or Okta is on the roadmap.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="band cta-wrap">
+  <div class="wrap">
+    <div class="cta-band reveal">
+      <h2 class="display-md">Bring AI to every role, safely.</h2>
+      <p class="sub">Sign in to your organization's workspace, or explore the FirstRound demo workspace with Google.</p>
+      <div class="cta-row center">
+        <button class="btn primary lg" data-login><svg class="i"><use href="#i-building"/></svg>Log in to your organization</button>
+        <a class="btn secondary lg" href="https://github.com/praveensaharan/RoleSpace" rel="noopener" target="_blank"><svg class="i"><use href="#i-github"/></svg>Read the code</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap foot-grid">
+    <div class="foot-brand">
+      <a class="logo on-dark" href="#top"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>RoleSpace</a>
+      <p>Every role gets the right AI. The company keeps control.</p>
+    </div>
+    <div><h4>Product</h4><a href="#how">How it works</a><a href="#try">Try it</a><a href="#access">Models &amp; repos</a><a href="#usage">Usage &amp; cost</a></div>
+    <div><h4>Company</h4><a href="#roi">ROI</a><a href="#integrate">Integration</a><a href="#security">Security</a><a href="#compare">Compare</a></div>
+    <div><h4>Resources</h4><a href="https://github.com/praveensaharan/RoleSpace" rel="noopener" target="_blank">Source code</a><a href="https://github.com/praveensaharan/RoleSpace/blob/main/docs/enterprise-design.md" rel="noopener" target="_blank">Enterprise design</a><a href="https://github.com/praveensaharan/RoleSpace/blob/main/docs/security.md" rel="noopener" target="_blank">Security model</a><a href="#faq">FAQ</a></div>
+  </div>
+</footer>
+
+<div class="modal-back" id="login" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <button class="icon-btn close" aria-label="Close" data-close><svg class="i"><use href="#i-x"/></svg></button>
+    <span class="mark big" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    <h2 id="login-title" class="display-sm">Log in to your organization</h2>
+    <p class="muted">Enter your work email. We'll find your company's workspace and send you to its sign-in.</p>
+    <form id="login-form" novalidate>
+      <label class="sr" for="login-email">Work email</label>
+      <input class="input" id="login-email" type="email" autocomplete="email" placeholder="name@company.com" maxlength="200" required>
+      <button class="btn primary block" type="submit"><span>Continue</span><svg class="i"><use href="#i-arrow"/></svg></button>
+    </form>
+    <div class="login-result" id="login-result" aria-live="polite"></div>
+    <p class="fine">Try <button class="text-link" data-fill="maya@firstround.example">maya@firstround.example</button> or your own email.</p>
+  </div>
+</div>
+</body>
+</html>

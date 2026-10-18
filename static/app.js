@@ -103,6 +103,7 @@ const ROUTES = {
   assistant: { label: "Assistant", icon: "message", group: "Work", render: renderAssistant },
   requests: { label: "Requests", icon: "inbox", group: "Work", render: renderRequests },
   changes: { label: "Changes", icon: "pr", group: "Work", show: (p) => p.tools.includes("propose_edit") || isGov(p), render: renderChanges },
+  github: { label: "Issues & PRs", icon: "pr", group: "Work", render: renderGitHub },
   workspace: { label: "Workspace", icon: "terminal", group: "Work", show: (p) => p.level === "build", render: renderWorkspace },
   overview: { label: "Overview", icon: "chart", group: "Govern", show: isGov, render: renderOverview },
   usage: { label: "Usage", icon: "key", group: "Govern", show: isGov, render: renderUsage },
@@ -724,6 +725,7 @@ async function renderOverview(page, id) {
   page.innerHTML = `<div class="page-head"><div class="t"><h1>Overview</h1>
     <p>Spend, safety and impact across the ${esc(S.info.company)} team, live from the gateway's spend log and the audit trail.</p></div>
     <div class="actions"><button class="btn" data-action="refresh">${icon("refresh")} Refresh</button>
+      <button class="btn danger" data-action="demo-reset" title="Put the demo back the way it started, for the next person">${icon("refresh")} Reset demo</button>
       <a class="btn" href="/api/govern/evidence?person=${esc(S.me)}&format=json">${icon("download")} Evidence pack</a></div></div>
     <div id="ov"><div class="kpis">${'<section class="panel kpi"><div class="skeleton" style="width:50%"></div><div class="skeleton" style="height:28px;margin-top:10px"></div></section>'.repeat(4)}</div></div>`;
   let d;
@@ -917,6 +919,47 @@ function currentModel(p) {
 function currentProject(p) {
   const pick = S.project?.[p.id];
   return (p.projects || []).includes(pick) ? pick : (p.projects || [])[0];
+}
+
+// ---- Issues & pull requests, live from GitHub (nobody needs a GitHub account) --------------
+
+const GH_STATE = { open: ["ok", "Open"], merged: ["merged", "Merged"], closed: ["", "Closed"], draft: ["", "Draft"] };
+
+async function renderGitHub(page, id) {
+  const p = me(), proj = currentProject(p);
+  page.innerHTML = `<div class="page-head"><div class="t"><h1>Issues & pull requests</h1>
+      <p>Live from GitHub for the repositories you can access. Pull requests opened from RoleSpace are marked, so
+        people without a GitHub account can follow their changes to merge.</p></div>
+      <div class="actions">${(p.projects || []).length > 1 ? `<select class="input" id="gh-project" aria-label="Repository">${p.projects.map((k) =>
+        `<option value="${esc(k)}" ${k === proj ? "selected" : ""}>${esc(projectName(k))}</option>`).join("")}</select>` : ""}
+        <a class="btn" href="https://github.com/${esc(projectRepo(proj))}" target="_blank" rel="noopener">${icon("external")} Open on GitHub</a></div></div>
+    <div id="gh"><div class="kpis">${'<section class="panel kpi"><div class="skeleton" style="width:50%"></div><div class="skeleton" style="height:28px;margin-top:10px"></div></section>'.repeat(4)}</div></div>`;
+  $("#gh-project")?.addEventListener("change", (e) => { (S.project ||= {})[p.id] = e.target.value; render(); });
+  let d;
+  try { d = await api(`/api/github?person=${encodeURIComponent(S.me)}&project=${encodeURIComponent(proj)}`); }
+  catch (e) { if (id === S.renderId) $("#gh").innerHTML = `<div class="callout bad">${icon("alert")}<div><b>${esc(e.message)}</b></div></div>`; return; }
+  if (id !== S.renderId) return;
+  const open = d.pulls.filter((x) => x.state === "open"), ours = d.pulls.filter((x) => x.from_rolespace);
+  const state = (x) => { const [c, l] = GH_STATE[x.draft && x.state === "open" ? "draft" : x.state] || ["", x.state]; return `<span class="badge ${c}">${icon("pr")} ${l}</span>`; };
+  const who = (x) => `<span class="small muted">#${x.number} · ${esc(x.author || "?")} · ${esc(ago(x.updated))}</span>`;
+  $("#gh").innerHTML = `<div class="kpis">
+      ${kpi("Open issues", d.issues.length, `in ${esc(d.repo)}`, "inbox")}
+      ${kpi("Open pull requests", open.length, `${d.pulls.length} recent in all`, "pr")}
+      ${kpi("Merged", d.pulls.filter((x) => x.state === "merged").length, "of the recent pull requests", "check")}
+      ${kpi("From RoleSpace", ours.length, "opened for people without GitHub", "zap")}</div>
+    <div class="g2" style="margin-top:16px">
+      <section class="panel"><div class="panel-head"><h2>Pull requests <span class="sub">newest activity first</span></h2></div>
+        <div class="panel-body flush">${d.pulls.length ? `<ul class="gh-list">${d.pulls.map((x) => `<li>
+          ${state(x)}<div class="gh-main"><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>
+          <div>${who(x)} ${x.from_rolespace ? `<span class="badge info">${icon("zap")} from RoleSpace</span>` : `<span class="mono small muted">${esc(x.branch)}</span>`}</div></div></li>`).join("")}</ul>`
+          : `<div class="empty"><b>No pull requests yet</b>Edits opened from the assistant appear here.</div>`}</div></section>
+      <section class="panel"><div class="panel-head"><h2>Open issues <span class="sub">newest activity first</span></h2></div>
+        <div class="panel-body flush">${d.issues.length ? `<ul class="gh-list">${d.issues.map((x) => `<li>
+          <span class="badge ok">${icon("alert")} Open</span><div class="gh-main"><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>
+          <div>${who(x)}${x.comments ? ` <span class="small muted">· ${x.comments} comment${x.comments === 1 ? "" : "s"}</span>` : ""}
+            ${x.labels.map((l) => `<span class="gh-label" style="--c:#${esc(l.color)}">${esc(l.name)}</span>`).join("")}</div></div></li>`).join("")}</ul>`
+          : `<div class="empty"><b>No open issues</b>New issues on GitHub appear here within a minute.</div>`}</div></section></div>
+    <p class="small muted" style="margin-top:12px">${icon("info")} Read live from GitHub, refreshed every minute. Last read ${esc(ago(d.fetched))}.</p>`;
 }
 
 // ---- saved chats ----------------------------------------------------------------------------
@@ -1463,7 +1506,7 @@ const KIND = {
   elevation_ended: ["", "Elevation ended"], request_updated: ["", "Request updated"], evidence_exported: ["", "Evidence exported"],
   handoff_drafted: ["", "Handoff drafted"], member_added: ["ok", "Member added"], member_removed: ["", "Member removed"],
   policy_changed: ["info", "Policy changed"], policy_reset: ["", "Policy reset"], policy_synced: ["", "Keys synced"],
-  repo_access_changed: ["info", "Repo access changed"],
+  repo_access_changed: ["info", "Repo access changed"], demo_reset: ["warn", "Demo reset"],
 };
 const kindBadge = (k) => { const [c, l] = KIND[k] || ["", k.replace(/_/g, " ")]; return `<span class="badge ${c}">${esc(l)}</span>`; };
 
@@ -1562,6 +1605,17 @@ const ACTIONS = {
   "end-grant": (el) => endGrant(el),
   onboard: () => onboard(),
   "remove-member": (el) => removeMember(el),
+  "demo-reset": () => modal({ title: "Reset the demo?", danger: true, confirm: "Reset demo",
+    sub: "For the next judge: everything goes back to how the demo started. The audit log keeps a record of the reset and of everything before it.",
+    body: `<div class="plan"><b>What happens</b><ul><li>Policy and repo access go back to role.yaml</li>
+      <li>Everyone in role.yaml is active again on their level's models and budget, with spend back to $0</li>
+      <li>Temporary access ends; people added during the demo are removed and their keys blocked</li>
+      <li>Not changed: the gateway's total budget, which nothing in the app can raise</li></ul></div>`,
+    onConfirm: async () => {
+      const r = await api("/api/govern/demo-reset", { person: S.me });
+      r.failed.length ? toast(`Reset, but some steps failed: ${r.failed.join("; ")}`, "bad") : toast("Demo reset. Everything is back to the start.");
+      await refreshPeople(); render();
+    } }),
   "usage-days": (el) => { S.usageDays = Number(el.dataset.n); renderUsage($("#page"), S.renderId); },
 };
 
