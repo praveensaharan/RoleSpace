@@ -22,8 +22,8 @@ def lookup(email, ip="203.0.113.10"):
 def test_known_domain_finds_its_workspace():
     r = lookup("maya@firstround.example")
     assert r.status_code == 200
-    assert r.json() == {"status": "found", "org": "FirstRound", "workspace": "https://rolespace.duckdns.org",
-                        "sign_in": "Google"}
+    assert r.json() == {"status": "found", "org": "FirstRound", "sign_in": "Google",
+                        "workspace": "https://rolespace.duckdns.org/rolespace-ent/"}
 
 
 def test_other_emails_get_the_demo_workspace_only():

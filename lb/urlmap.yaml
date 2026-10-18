@@ -1,0 +1,49 @@
+# The HTTPS load balancer's routing (gcloud compute url-maps import format).
+# apply_urlmap.sh fills in __BACKENDS__ and __DOMAIN__.
+#   https://DOMAIN/                 the public website (no sign-in)
+#   https://DOMAIN/rolespace-ent/   the RoleSpace app behind IAP, served from its own root
+#   https://www.DOMAIN/...          301 to https://DOMAIN/...
+name: rolespace-urlmap
+defaultService: __BACKENDS__/rolespace-backend
+hostRules:
+- hosts:
+  - __DOMAIN__
+  pathMatcher: main
+- hosts:
+  - www.__DOMAIN__
+  pathMatcher: www
+pathMatchers:
+- name: main
+  defaultService: __BACKENDS__/rolespace-site-backend
+  routeRules:
+  - priority: 1
+    matchRules:
+    - fullPathMatch: /rolespace-ent
+    urlRedirect:
+      pathRedirect: /rolespace-ent/
+      redirectResponseCode: MOVED_PERMANENTLY_DEFAULT
+      stripQuery: false
+  - priority: 2       # the app: /rolespace-ent/x reaches it as /x
+    matchRules:
+    - prefixMatch: /rolespace-ent/
+    service: __BACKENDS__/rolespace-backend
+    routeAction:
+      urlRewrite:
+        pathPrefixRewrite: /
+  - priority: 3       # the website's own lookup
+    matchRules:
+    - fullPathMatch: /api/org
+    service: __BACKENDS__/rolespace-site-backend
+  - priority: 4       # the app's API and assets, and IAP's sign-in return path, must reach the IAP backend
+    matchRules:
+    - prefixMatch: /api/
+    - prefixMatch: /static/
+    - prefixMatch: /_gcp_gatekeeper/
+    - prefixMatch: /_gcp_iap/
+    service: __BACKENDS__/rolespace-backend
+- name: www
+  defaultUrlRedirect:
+    hostRedirect: __DOMAIN__
+    httpsRedirect: false      # already HTTPS; true would add ":443" to the Location
+    redirectResponseCode: MOVED_PERMANENTLY_DEFAULT
+    stripQuery: false
