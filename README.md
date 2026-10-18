@@ -4,14 +4,13 @@
 
 RoleSpace gives every person in a software company the right amount of AI for their job. One policy file, [`role.yaml`](role.yaml), gives each person a level. The level decides four things: which AI tools they get, which files they may change, which models they may call and how much they may spend. The rules are enforced in code, at the model gateway, in CI and in IAM, never by the prompt.
 
-Built for the **AI Builder Cup 2026** (theme: *Future of Work & Enterprise Productivity*) on Google Cloud: Gemini on Vertex AI, the Agent Development Kit, Cloud Run and Identity-Aware Proxy.
+Built on Google Cloud: Gemini on Vertex AI, the Agent Development Kit, Cloud Run and Identity-Aware Proxy.
 
 | | |
 |---|---|
 | Website | https://rolespace.duckdns.org (public, interactive product tour; "Log in to your organization" leads to the app) |
 | Live app | https://rolespace.duckdns.org/rolespace-ent/ (sign in with Google, then pick a persona) |
 | Demo video (3 min) | https://www.youtube.com/watch?v=cTBwacNvkZc |
-| Submission deck | [PDF](docs/deck/RoleSpace-AI-Builder-Cup-submission.pdf) · [PPTX](docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx) · [design deck (PDF)](docs/deck/RoleSpace-deck.pdf) |
 
 ![How RoleSpace works](docs/architecture/flow-1-env-usage.png)
 
