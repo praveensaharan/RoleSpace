@@ -8,8 +8,8 @@ Built for the **AI Builder Cup 2026** (theme: *Future of Work & Enterprise Produ
 
 | | |
 |---|---|
-| Live app | https://rolespace.duckdns.org (sign in with Google, then pick a persona) |
-| Website | https://www.rolespace.duckdns.org (public, interactive product tour) |
+| Website | https://rolespace.duckdns.org (public, interactive product tour; "Log in to your organization" leads to the app) |
+| Live app | https://rolespace.duckdns.org/rolespace-ent/ (sign in with Google, then pick a persona) |
 | Demo video (3 min) | *add the link* |
 | Submission deck | [docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx](docs/deck/RoleSpace-AI-Builder-Cup-submission.pptx) · [design deck (PDF)](docs/deck/RoleSpace-deck.pdf) |
 
@@ -100,7 +100,7 @@ Enterprise controls:
 - **Policy form:** Govern → Policy changes each level's models, budget and rate limits without editing YAML, then pushes the change to every key.
 - **Saved chats:** a History window reopens earlier chats, which are kept per browser for 30 days.
 - **Workspaces per repository:** a Build workspace clones only the person's repositories, with VS Code and Gemini CLI for each, and opens in the Antigravity desktop IDE too.
-- **Public website:** an interactive product tour at https://www.rolespace.duckdns.org, with "Log in to your organization" by work email.
+- **Public website:** an interactive product tour at https://rolespace.duckdns.org, with "Log in to your organization" by work email.
 - **Spending guardrails:** budgets and rate limits per key, one ceiling for all AI, and a project-wide hard stop (`billing_cap/`, in dry-run).
 
 Screenshots are in [docs/screenshots](docs/screenshots).
@@ -155,6 +155,7 @@ gateway/                                               LiteLLM config and image;
 coder/                                                 Coder VM setup, workspace image, template, relay
 website/                                               the public website: static pages and a work-email → workspace lookup
 billing_cap/                                           the project-wide spending kill switch (Cloud Run + Pub/Sub)
+lb/                                                    the load balancer's routing: website at /, the app at /rolespace-ent/
 tests/test_core.py                                     allow-list, explain, citations, audit chain
 eval/                                                  evaluation script and results
 docs/architecture/                                     flow diagrams and four high-level design pages

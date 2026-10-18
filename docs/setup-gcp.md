@@ -1,6 +1,6 @@
 # Deploying RoleSpace on Google Cloud
 
-This guide sets up the same system that runs at rolespace.duckdns.org. Replace `PROJECT` and `REGION` with your own values. All commands run in Cloud Shell or on any machine where `gcloud` is signed in as a project owner.
+This guide sets up the same system that runs at rolespace.duckdns.org (website) and rolespace.duckdns.org/rolespace-ent/ (app). Replace `PROJECT` and `REGION` with your own values. All commands run in Cloud Shell or on any machine where `gcloud` is signed in as a project owner.
 
 ```bash
 PROJECT=your-project-id
@@ -139,15 +139,19 @@ If your project isn't in a Google Cloud organization, or users sign in with acco
 
 ```bash
 gcloud iam service-accounts create rolespace-site     # no roles: the site reads nothing in the project
-cd website && gcloud run deploy rolespace-site --source . --region=$REGION --allow-unauthenticated \
-  --service-account=rolespace-site@$PROJECT.iam.gserviceaccount.com --min-instances=0 --max-instances=3 \
-  --memory=256Mi --set-env-vars="^@^TRUSTED_PROXIES=LB_IP/32,35.191.0.0/16,130.211.0.0/22"
+LB_IP=YOUR_LOAD_BALANCER_IP ./website/deploy.sh
 ```
 
 - Map your company's email domains to workspace URLs in [`website/orgs.json`](../website/orgs.json). The lookup only ever returns URLs listed there.
 - `TRUSTED_PROXIES` lists the load balancer's IP and Google's front-end ranges. The rate limit (20 lookups a minute) then counts each visitor, not the load balancer.
 
-To serve it as `www.` on the same load balancer as the app, add a second backend without IAP, a certificate and a host rule. The app's own host and default route don't change.
+To serve the website at your domain's root and the app under `/rolespace-ent/` on the same load balancer, add a second backend without IAP. Then route by path:
+- `/` goes to the website.
+- `/rolespace-ent/` goes to the app, rewritten to `/`.
+- The app's own `/api/`, `/static/` and IAP's `/_gcp_gatekeeper/` and `/_gcp_iap/` paths go to the app.
+- `/api/org` stays with the website.
+
+`www.` can be redirected to the root, or served as its own host.
 
 ```bash
 gcloud compute network-endpoint-groups create rolespace-site-neg --region=$REGION \
@@ -155,14 +159,16 @@ gcloud compute network-endpoint-groups create rolespace-site-neg --region=$REGIO
 gcloud compute backend-services create rolespace-site-backend --global --load-balancing-scheme=EXTERNAL_MANAGED
 gcloud compute backend-services add-backend rolespace-site-backend --global \
   --network-endpoint-group=rolespace-site-neg --network-endpoint-group-region=$REGION
-gcloud compute ssl-certificates create rolespace-www-cert --global --domains=www.YOUR_DOMAIN
-gcloud compute target-https-proxies update rolespace-https-proxy --global \
-  --ssl-certificates=rolespace-cert,rolespace-www-cert
-gcloud compute url-maps add-path-matcher rolespace-urlmap --global --path-matcher-name=site \
-  --default-service=rolespace-site-backend --new-hosts=www.YOUR_DOMAIN
 ```
 
-The certificate goes active 15–60 minutes after `www.YOUR_DOMAIN` points at the load balancer.
+Then apply the routing in [`lb/urlmap.yaml`](../lb/urlmap.yaml) with [`lb/apply_urlmap.sh`](../lb/apply_urlmap.sh). It fills in your project and domain, validates the map, saves the previous one for a rollback and imports the new one:
+
+```bash
+DOMAIN=YOUR_DOMAIN ./lb/apply_urlmap.sh --check   # validate only
+DOMAIN=YOUR_DOMAIN ./lb/apply_urlmap.sh
+```
+
+Set the website's workspace URL in `website/orgs.json` to `https://YOUR_DOMAIN/rolespace-ent/`. A managed certificate goes active 15–60 minutes after its domain points at the load balancer.
 
 ## 6. A hard spending cap (optional)
 

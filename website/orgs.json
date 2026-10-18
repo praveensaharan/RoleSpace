@@ -2,8 +2,25 @@
   "_note": "Work-email domain -> organization workspace. Only URLs listed here are ever returned, so the lookup can't be used as an open redirect.",
   "demo": "firstround.example",
   "orgs": {
-    "firstround.example": {"name": "FirstRound", "workspace": "https://rolespace.duckdns.org", "sign_in": "Google"}
+    "firstround.example": {
+      "name": "FirstRound",
+      "workspace": "https://rolespace.duckdns.org/rolespace-ent/",
+      "sign_in": "Google"
+    }
   },
-  "personal_domains": ["gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "yahoo.com", "icloud.com",
-                       "me.com", "proton.me", "protonmail.com", "aol.com", "gmx.com", "zoho.com"]
+  "personal_domains": [
+    "gmail.com",
+    "googlemail.com",
+    "outlook.com",
+    "hotmail.com",
+    "live.com",
+    "yahoo.com",
+    "icloud.com",
+    "me.com",
+    "proton.me",
+    "protonmail.com",
+    "aol.com",
+    "gmx.com",
+    "zoho.com"
+  ]
 }
